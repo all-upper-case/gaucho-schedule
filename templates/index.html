@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card narrow">
+  <h1>Open a schedule week</h1>
+  <p>Pick any date in the week. The app will automatically use that week's Monday.</p>
+  <form action="/week" method="post" class="inline-form">
+    <input type="date" name="week_start" value="{{ current_week.isoformat() }}">
+    <button type="submit">Open Week</button>
+  </form>
+</section>
+
+<section class="card narrow">
+  <h2>Recent weeks</h2>
+  {% if weeks %}
+    <ul class="week-list">
+      {% for week in weeks %}
+        <li><a href="/week/{{ week.start_date }}">Week of {{ week.start_date }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No weeks have been created yet.</p>
+  {% endif %}
+</section>
+{% endblock %}
