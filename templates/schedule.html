@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="schedule-header">
+  <div>
+    <h1>Week of {{ week_start.strftime('%m/%d/%Y') }}</h1>
+    <p>{{ week_start.strftime('%m/%d/%Y') }} through {{ week_end.strftime('%m/%d/%Y') }}</p>
+  </div>
+  <div class="actions">
+    <a class="button secondary" href="/print/{{ week_start.isoformat() }}" target="_blank">Print View</a>
+    <a class="button secondary" href="/export/{{ week_start.isoformat() }}.xlsx">Export Excel</a>
+    <a class="button secondary" href="/export/{{ week_start.isoformat() }}.csv">Export CSV</a>
+    <form action="/week/{{ week_start.isoformat() }}/copy-next" method="post">
+      <button type="submit">Create Next Week</button>
+    </form>
+  </div>
+</div>
+
+{% if warnings %}
+<section class="warning-box">
+  <h2>Things to double-check before printing</h2>
+  <ul>
+    {% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<form action="/week/{{ week_start.isoformat() }}/save" method="post">
+  <datalist id="shift-options">
+    {% for option in shift_options %}<option value="{{ option }}"></option>{% endfor %}
+  </datalist>
+
+  {% for role, employees in grouped %}
+    <section class="role-card">
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th class="role-title">{{ role.title }}<br><span>{{ role.subtitle }}</span></th>
+            {% for day in days %}<th>{{ day }}<br><span>{{ dates[loop.index0].day }}</span></th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for emp in employees %}
+            <tr>
+              <th class="employee-name">{{ emp.name }}</th>
+              {% for i in range(7) %}
+                <td><input name="shift_{{ emp.id }}_{{ i }}" value="{{ shifts.get((emp.id, i), 'OFF') }}" list="shift-options"></td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endfor %}
+
+  <div class="sticky-save">
+    <button type="submit">Save Schedule</button>
+    <span class="muted">Tip: use OFF, 2:30 PM, 10:00 AM-4:00 PM, or CLOSE.</span>
+  </div>
+</form>
+{% endblock %}
