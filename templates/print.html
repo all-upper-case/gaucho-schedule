@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Gaucho Schedule {{ week_start }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="print-page">
+  <div class="print-actions no-print">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <a class="button secondary" href="/week/{{ week_start.isoformat() }}">Back to editor</a>
+  </div>
+
+  <h1 class="print-title">GAUCHO URBANO EMPLOYEE SCHEDULE <span>{{ week_start.month }}/{{ week_start.day }}/{{ week_start.year }}</span> <em>through</em> <span>{{ week_end.month }}/{{ week_end.day }}/{{ week_end.year }}</span></h1>
+
+  {% for role, employees in grouped %}
+    <section class="print-section">
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th>{{ role.title }}<br>{{ role.subtitle }}</th>
+            {% for day in days %}<th>{{ day }}<br>{{ dates[loop.index0].day }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for emp in employees %}
+            <tr>
+              <th>{{ emp.name }}</th>
+              {% for i in range(7) %}<td>{{ shifts.get((emp.id, i), 'OFF') }}</td>{% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endfor %}
+
+  <div class="signature-row">
+    <span>Manager Signature</span><span>Date</span><span>Employee Signature</span>
+  </div>
+</body>
+</html>
