@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card narrow">
+  <h1>Import schedule history</h1>
+  <p>Select the existing Excel schedule workbook. The app will scan the weekly tabs and use the old entries for smarter dropdown suggestions.</p>
+  <p class="muted">This rebuilds suggestion history only. It does not replace current schedules.</p>
+  <form action="/import-history" method="post" class="stacked-form" enctype="multipart/form-data">
+    <label>Schedule workbook <input type="file" name="schedule_workbook" accept=".xlsx,.xlsm" required></label>
+    <button type="submit">Import History</button>
+  </form>
+</section>
+{% endblock %}
