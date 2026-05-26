@@ -1,0 +1,52 @@
+:root {
+  --editor-font-size: 14px;
+  --editor-zoom: 1;
+}
+
+.schedule-form {
+  font-size: var(--editor-font-size);
+  transform: scale(var(--editor-zoom));
+  transform-origin: top left;
+  width: calc(100% / var(--editor-zoom));
+}
+
+.schedule-table input.shift-input {
+  font-size: var(--editor-font-size);
+}
+
+.stacked-form {
+  display: grid;
+  gap: 16px;
+  max-width: 680px;
+}
+
+.stacked-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.stacked-form label input,
+.stacked-form label select {
+  font-weight: 400;
+}
+
+.preferences-panel h2 {
+  margin-top: 24px;
+}
+
+.preferences-panel input[type="range"] {
+  width: 100%;
+}
+
+.shift-input:focus {
+  outline: 3px solid rgba(31, 95, 139, 0.25);
+  border-color: var(--accent);
+}
+
+@media print {
+  .schedule-form {
+    transform: none;
+    width: 100%;
+  }
+}
