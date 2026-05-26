@@ -10,6 +10,15 @@
 </section>
 
 <section class="card narrow">
+  <h2>Dropdown history</h2>
+  {% if history_rows %}
+    <p>{{ history_rows }} historical shift entries are available for smart dropdown suggestions.</p>
+  {% else %}
+    <p>No workbook history has been imported yet. Use <a href="/import-history">Import History</a> to upload the old Excel schedule workbook.</p>
+  {% endif %}
+</section>
+
+<section class="card narrow">
   <h2>Recent weeks</h2>
   {% if weeks %}
     <ul class="week-list">
