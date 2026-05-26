@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card narrow preferences-panel">
+  <h1>Preferences</h1>
+  <p>These settings are saved in this browser, so Junior can tune the editor without changing the schedule database.</p>
+
+  <form id="preferences-form" class="stacked-form">
+    <label>
+      Time format for autocorrect and print view
+      <select name="timeFormat" data-pref="timeFormat">
+        <option value="12h">12-hour, like 3:00 PM</option>
+        <option value="24h">24-hour, like 15:00</option>
+      </select>
+    </label>
+
+    <label>
+      Editor font size
+      <input type="range" min="12" max="22" step="1" name="fontSize" data-pref="fontSize">
+      <span data-pref-output="fontSize"></span>
+    </label>
+
+    <label>
+      Editor zoom
+      <input type="range" min="85" max="130" step="5" name="zoom" data-pref="zoom">
+      <span data-pref-output="zoom"></span>
+    </label>
+
+    <label>
+      Autocorrect behavior
+      <select name="autocorrect" data-pref="autocorrect">
+        <option value="on">Autocorrect when leaving a cell</option>
+        <option value="off">Leave typed values unchanged</option>
+      </select>
+    </label>
+
+    <label>
+      Dropdown behavior
+      <select name="dropdownBehavior" data-pref="dropdownBehavior">
+        <option value="smart">Smart dropdowns: previous week first, then employee/role/common times</option>
+        <option value="basic">Basic dropdowns only</option>
+        <option value="off">Hide dropdown suggestions</option>
+      </select>
+    </label>
+
+    <h2>Keyboard behavior</h2>
+    <label>
+      Enter key
+      <select name="enterKey" data-pref="enterKey">
+        <option value="down">Move to same day on next employee</option>
+        <option value="right">Move to next day on same employee</option>
+        <option value="none">Do not move</option>
+      </select>
+    </label>
+
+    <label>
+      Down arrow
+      <select name="downKey" data-pref="downKey">
+        <option value="down">Move to same day on next employee</option>
+        <option value="none">Use browser default</option>
+      </select>
+    </label>
+
+    <label>
+      Space key
+      <select name="spaceKey" data-pref="spaceKey">
+        <option value="right">Move to next day on same employee</option>
+        <option value="none">Type a space</option>
+      </select>
+    </label>
+
+    <label>
+      Tab key
+      <select name="tabKey" data-pref="tabKey">
+        <option value="right">Move to next day on same employee</option>
+        <option value="browser">Use browser default tab order</option>
+      </select>
+    </label>
+
+    <div class="actions">
+      <button type="button" id="save-preferences">Save Preferences</button>
+      <button type="button" id="reset-preferences" class="secondary">Reset Defaults</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
