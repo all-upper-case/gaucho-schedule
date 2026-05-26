@@ -9,9 +9,10 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from flask import Flask, Response, flash, redirect, render_template, request, send_file, url_for
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, Side
 from openpyxl.utils import get_column_letter
 
@@ -24,20 +25,10 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-local-only-change-before-hosting")
 
 DAYS = ["MON", "TUES", "WEDS", "THURS", "FRI", "SAT", "SUN"]
-SHIFT_OPTIONS = [
-    "OFF",
-    "9:00 AM",
-    "10:00 AM",
-    "10:30 AM",
-    "11:00 AM",
-    "12:00 PM",
-    "1:00 PM",
-    "2:00 PM",
-    "2:30 PM",
-    "3:00 PM",
-    "4:00 PM",
-    "5:00 PM",
-    "CLOSE",
+DAY_WORDS = set(DAYS + ["THU"])
+GLOBAL_SHIFT_OPTIONS = [
+    "OFF", "9:00 AM", "10:00 AM", "10:30 AM", "11:00 AM", "12:00 PM",
+    "1:00 PM", "2:00 PM", "2:30 PM", "3:00 PM", "4:00 PM", "5:00 PM", "CLOSE",
 ]
 
 DEFAULT_ROLES = [
@@ -123,6 +114,18 @@ def init_db() -> None:
                 label TEXT NOT NULL DEFAULT 'OFF',
                 UNIQUE(week_id, employee_id, day_index)
             );
+
+            CREATE TABLE IF NOT EXISTS shift_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_title TEXT NOT NULL,
+                role_subtitle TEXT NOT NULL DEFAULT '',
+                employee_name TEXT NOT NULL,
+                day_index INTEGER NOT NULL CHECK(day_index BETWEEN 0 AND 6),
+                label TEXT NOT NULL,
+                source_sheet TEXT NOT NULL DEFAULT '',
+                count INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(role_title, role_subtitle, employee_name, day_index, label, source_sheet)
+            );
             """
         )
 
@@ -173,6 +176,10 @@ def roles(db: sqlite3.Connection) -> list[Role]:
     return [Role(**dict(r)) for r in db.execute("SELECT * FROM roles ORDER BY display_order, id")]
 
 
+def role_by_id(db: sqlite3.Connection) -> dict[int, Role]:
+    return {role.id: role for role in roles(db)}
+
+
 def employees(db: sqlite3.Connection, include_inactive: bool = False) -> list[Employee]:
     where = "" if include_inactive else "WHERE active = 1"
     return [
@@ -197,17 +204,191 @@ def grouped_schedule(db: sqlite3.Connection, week_start: date):
     return week_id, [(role, by_role.get(role.id, [])) for role in all_roles], shifts
 
 
+def time_to_12h(hour: int, minute: int = 0) -> str:
+    hour = hour % 24
+    suffix = "AM" if hour < 12 else "PM"
+    h12 = hour % 12 or 12
+    return f"{h12}:{minute:02d} {suffix}"
+
+
+def normalize_shift_label(value, output_format: str = "12h") -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, (int, float)):
+        if 0 <= float(value) < 1:
+            total = round(float(value) * 24 * 60)
+            return format_minutes(total, output_format)
+        if float(value).is_integer():
+            return normalize_shift_label(str(int(value)), output_format)
+        return str(value).strip()
+
+    raw = str(value).strip()
+    if not raw:
+        return ""
+    upper = raw.upper()
+    if upper in {"OFF", "OOF"}:
+        return "OFF"
+    if upper in {"CL", "CLOSE", "CLOSING"}:
+        return "CLOSE"
+
+    if any(separator in raw for separator in [";", "-", "–", "—"]):
+        pieces = [p.strip() for p in re.split(r"[;\-–—]+", raw) if p.strip()]
+        if len(pieces) == 2:
+            first = normalize_shift_label(pieces[0], output_format)
+            second = normalize_shift_label(pieces[1], output_format)
+            if is_real_time_label(first) and is_real_time_label(second):
+                return f"{first}-{second}"
+
+    candidate = raw.replace(";", ":").replace(".", ":")
+    match = re.fullmatch(r"(\d{1,2})(?::(\d{1,2}))?\s*([AaPp][Mm])?", candidate)
+    if match:
+        hour = int(match.group(1))
+        minute = int(match.group(2) or 0)
+        suffix = match.group(3).upper() if match.group(3) else None
+        if minute >= 60:
+            return upper
+        if suffix:
+            if suffix == "PM" and hour < 12:
+                hour += 12
+            if suffix == "AM" and hour == 12:
+                hour = 0
+        else:
+            if len(match.group(1)) <= 2 and match.group(2) is None and hour > 23:
+                return upper
+            # Restaurant shorthand: 3 or 300 means 3 PM; 15 or 1500 means 3 PM.
+            if hour <= 7:
+                hour += 12
+        return format_minutes(hour * 60 + minute, output_format)
+
+    compact = re.fullmatch(r"\d{3,4}", raw)
+    if compact:
+        hour = int(raw[:-2])
+        minute = int(raw[-2:])
+        if hour <= 23 and minute < 60:
+            if hour <= 7:
+                hour += 12
+            return format_minutes(hour * 60 + minute, output_format)
+
+    return upper
+
+
+def format_minutes(total_minutes: int, output_format: str = "12h") -> str:
+    total_minutes = total_minutes % (24 * 60)
+    hour = total_minutes // 60
+    minute = total_minutes % 60
+    if output_format == "24h":
+        return f"{hour:02d}:{minute:02d}"
+    return time_to_12h(hour, minute)
+
+
+def is_real_time_label(label: str) -> bool:
+    return bool(re.search(r"\d{1,2}:\d{2}\s*(AM|PM)?", label))
+
+
+def label_is_usable(label: str) -> bool:
+    if not label:
+        return False
+    if label in {"OFF", "CLOSE"}:
+        return True
+    if label.upper() in DAY_WORDS or label.upper() == "THROUGH":
+        return False
+    return is_real_time_label(label)
+
+
+def unique_options(*groups: list[str]) -> list[str]:
+    seen: set[str] = set()
+    output: list[str] = []
+    for group in groups:
+        for item in group:
+            clean = (item or "").strip()
+            if clean and clean not in seen:
+                seen.add(clean)
+                output.append(clean)
+    return output
+
+
+def previous_week_options(db: sqlite3.Connection, week_start: date) -> dict[tuple[int, int], str]:
+    previous = week_start - timedelta(days=7)
+    row = db.execute("SELECT id FROM weeks WHERE start_date = ?", (previous.isoformat(),)).fetchone()
+    if not row:
+        return {}
+    return shift_map(db, int(row["id"]))
+
+
+def history_options_for_cell(db: sqlite3.Connection, role: Role, employee: Employee, day_index: int) -> list[str]:
+    rows = db.execute(
+        """
+        SELECT label, SUM(count) AS total
+        FROM shift_history
+        WHERE role_title = ? AND role_subtitle = ? AND employee_name = ? AND day_index = ?
+        GROUP BY label
+        ORDER BY total DESC, label
+        LIMIT 12
+        """,
+        (role.title, role.subtitle, employee.name.upper(), day_index),
+    ).fetchall()
+    return [r["label"] for r in rows]
+
+
+def role_options_for_cell(db: sqlite3.Connection, role: Role, day_index: int) -> list[str]:
+    rows = db.execute(
+        """
+        SELECT label, SUM(count) AS total
+        FROM shift_history
+        WHERE role_title = ? AND role_subtitle = ? AND day_index = ?
+        GROUP BY label
+        ORDER BY total DESC, label
+        LIMIT 10
+        """,
+        (role.title, role.subtitle, day_index),
+    ).fetchall()
+    return [r["label"] for r in rows]
+
+
+def global_options_for_cell(db: sqlite3.Connection, day_index: int) -> list[str]:
+    rows = db.execute(
+        """
+        SELECT label, SUM(count) AS total
+        FROM shift_history
+        WHERE day_index = ?
+        GROUP BY label
+        ORDER BY total DESC, label
+        LIMIT 10
+        """,
+        (day_index,),
+    ).fetchall()
+    return [r["label"] for r in rows]
+
+
+def build_suggestions(db: sqlite3.Connection, grouped, week_start: date) -> dict[tuple[int, int], list[str]]:
+    previous = previous_week_options(db, week_start)
+    suggestions: dict[tuple[int, int], list[str]] = {}
+    for role, emps in grouped:
+        for emp in emps:
+            for day_index in range(7):
+                previous_value = previous.get((emp.id, day_index))
+                previous_group = [previous_value] if previous_value else []
+                suggestions[(emp.id, day_index)] = unique_options(
+                    previous_group,
+                    history_options_for_cell(db, role, emp, day_index),
+                    role_options_for_cell(db, role, day_index),
+                    global_options_for_cell(db, day_index),
+                    GLOBAL_SHIFT_OPTIONS,
+                )[:20]
+    return suggestions
+
+
 def validate_shift(label: str) -> list[str]:
     value = label.strip().upper()
     warnings: list[str] = []
-    if not value:
-        return warnings
-    if value in {"OFF", "CLOSE"}:
+    if not value or value in {"OFF", "CLOSE"}:
         return warnings
     if ";" in value:
-        warnings.append("uses a semicolon; consider changing it to a clear start/end time like 10:00 AM-4:00 PM")
+        warnings.append("uses a semicolon; it will be autocorrected when the cell loses focus")
     if re.fullmatch(r"\d{3,4}", value):
-        warnings.append("looks like 24-hour time; consider writing it as 5:00 PM, 1:00 PM, etc.")
+        warnings.append("looks like shorthand time; it will be autocorrected when the cell loses focus")
     if value == "12:00 AM":
         warnings.append("is midnight; confirm this is intentional and not noon/closing")
     if re.fullmatch(r"\d{1,2}:\d{2}\s*(AM|PM)", value):
@@ -239,6 +420,63 @@ def week_dates(week_start: date) -> list[date]:
     return [week_start + timedelta(days=i) for i in range(7)]
 
 
+def is_header_row(row) -> bool:
+    values = [str(row[i].value or "").strip().upper() for i in range(2, 9)]
+    return values == DAYS
+
+
+def import_history_from_workbook(path: Path) -> tuple[int, int, int]:
+    book = load_workbook(path, data_only=True, read_only=True, keep_vba=True)
+    rows_seen = 0
+    shift_count = 0
+    sheet_count = 0
+    inserts = []
+    for ws in book.worksheets:
+        if ws.title.upper().startswith("SHEET"):
+            continue
+        sheet_count += 1
+        current_role: tuple[str, str] | None = None
+        sheet_rows = list(ws.iter_rows(min_row=1, max_row=130, min_col=1, max_col=9))
+        for idx, row in enumerate(sheet_rows):
+            if is_header_row(row):
+                title = str(row[0].value or "").strip().upper()
+                subtitle = ""
+                if idx + 1 < len(sheet_rows):
+                    subtitle = str(sheet_rows[idx + 1][0].value or "").strip().upper()
+                current_role = (title, subtitle)
+                continue
+            if not current_role:
+                continue
+            name = str(row[0].value or "").strip().upper()
+            if not name or name in DAY_WORDS or "SIGNATURE" in name or name.startswith("("):
+                continue
+            labels = [normalize_shift_label(row[col].value, "12h") for col in range(2, 9)]
+            labels = [label for label in labels if label_is_usable(label)]
+            if not labels:
+                continue
+            rows_seen += 1
+            for day_index, cell in enumerate(row[2:9]):
+                label = normalize_shift_label(cell.value, "12h")
+                if label_is_usable(label):
+                    inserts.append((current_role[0], current_role[1], name, day_index, label, ws.title))
+                    shift_count += 1
+    book.close()
+
+    with closing(get_db()) as db:
+        db.execute("DELETE FROM shift_history")
+        db.executemany(
+            """
+            INSERT INTO shift_history (role_title, role_subtitle, employee_name, day_index, label, source_sheet, count)
+            VALUES (?, ?, ?, ?, ?, ?, 1)
+            ON CONFLICT(role_title, role_subtitle, employee_name, day_index, label, source_sheet)
+            DO UPDATE SET count = count + 1
+            """,
+            inserts,
+        )
+        db.commit()
+    return sheet_count, rows_seen, shift_count
+
+
 @app.before_request
 def ensure_db() -> None:
     init_db()
@@ -248,7 +486,8 @@ def ensure_db() -> None:
 def index():
     with closing(get_db()) as db:
         week_rows = db.execute("SELECT * FROM weeks ORDER BY start_date DESC LIMIT 12").fetchall()
-    return render_template("index.html", weeks=week_rows, current_week=monday_for())
+        history_rows = db.execute("SELECT COUNT(*) FROM shift_history").fetchone()[0]
+    return render_template("index.html", weeks=week_rows, current_week=monday_for(), history_rows=history_rows)
 
 
 @app.route("/week", methods=["POST"])
@@ -262,6 +501,7 @@ def edit_week(week_start: str):
     start = parse_week_start(week_start)
     with closing(get_db()) as db:
         week_id, grouped, shifts = grouped_schedule(db, start)
+        suggestions = build_suggestions(db, grouped, start)
         warnings = collect_warnings(db, week_id)
     return render_template(
         "schedule.html",
@@ -271,7 +511,7 @@ def edit_week(week_start: str):
         days=DAYS,
         grouped=grouped,
         shifts=shifts,
-        shift_options=SHIFT_OPTIONS,
+        suggestions=suggestions,
         warnings=warnings,
     )
 
@@ -282,10 +522,13 @@ def save_week(week_start: str):
     with closing(get_db()) as db:
         week_id = get_or_create_week(db, start)
         active_employees = employees(db)
+        role_lookup = role_by_id(db)
         for emp in active_employees:
+            role = role_lookup[emp.role_id]
             for day_index in range(7):
                 key = f"shift_{emp.id}_{day_index}"
-                label = request.form.get(key, "OFF").strip() or "OFF"
+                raw_label = request.form.get(key, "OFF").strip() or "OFF"
+                label = normalize_shift_label(raw_label, "12h")
                 db.execute(
                     """
                     INSERT INTO shifts (week_id, employee_id, day_index, label)
@@ -295,6 +538,16 @@ def save_week(week_start: str):
                     """,
                     (week_id, emp.id, day_index, label),
                 )
+                if label_is_usable(label):
+                    db.execute(
+                        """
+                        INSERT INTO shift_history (role_title, role_subtitle, employee_name, day_index, label, source_sheet, count)
+                        VALUES (?, ?, ?, ?, ?, 'manual-app-entry', 1)
+                        ON CONFLICT(role_title, role_subtitle, employee_name, day_index, label, source_sheet)
+                        DO UPDATE SET count = count + 1
+                        """,
+                        (role.title, role.subtitle, emp.name.upper(), day_index, label),
+                    )
         db.commit()
         warning_count = len(collect_warnings(db, week_id))
     flash(f"Schedule saved. {warning_count} warning(s) found." if warning_count else "Schedule saved.")
@@ -335,6 +588,31 @@ def print_week(week_start: str):
         grouped=grouped,
         shifts=shifts,
     )
+
+
+@app.route("/preferences")
+def preferences():
+    return render_template("preferences.html")
+
+
+@app.route("/import-history", methods=["GET", "POST"])
+def import_history():
+    if request.method == "POST":
+        upload = request.files.get("schedule_workbook")
+        if not upload or not upload.filename:
+            flash("Choose the schedule workbook first.")
+            return redirect(url_for("import_history"))
+        suffix = Path(upload.filename).suffix or ".xlsx"
+        with NamedTemporaryFile(delete=False, suffix=suffix) as temp:
+            upload.save(temp.name)
+            temp_path = Path(temp.name)
+        try:
+            sheet_count, row_count, shift_count = import_history_from_workbook(temp_path)
+            flash(f"Imported {shift_count} shifts from {row_count} employee rows across {sheet_count} sheets.")
+        finally:
+            temp_path.unlink(missing_ok=True)
+        return redirect(url_for("index"))
+    return render_template("import_history.html")
 
 
 @app.route("/employees", methods=["GET", "POST"])
@@ -404,9 +682,10 @@ def export_xlsx(week_start: str):
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
     row = 1
     ws.cell(row=row, column=1, value="GAUCHO URBANO EMPLOYEE SCHEDULE").font = Font(bold=True)
-    ws.cell(row=row, column=5, value=start.strftime("%-m/%-d/%Y") if os.name != "nt" else start.strftime("%#m/%#d/%Y"))
+    date_fmt = "%-m/%-d/%Y" if os.name != "nt" else "%#m/%#d/%Y"
+    ws.cell(row=row, column=5, value=start.strftime(date_fmt))
     ws.cell(row=row, column=6, value="through")
-    ws.cell(row=row, column=7, value=(start + timedelta(days=6)).strftime("%-m/%-d/%Y") if os.name != "nt" else (start + timedelta(days=6)).strftime("%#m/%#d/%Y"))
+    ws.cell(row=row, column=7, value=(start + timedelta(days=6)).strftime(date_fmt))
     row += 1
     for role, emps in grouped:
         row += 1
