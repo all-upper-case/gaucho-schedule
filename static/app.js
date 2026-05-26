@@ -42,12 +42,22 @@ function normalizeOneTime(raw, format) {
   let value = String(raw || "").trim();
   if (!value) return "";
   const upper = value.toUpperCase();
-  if (upper === "OFF" || upper === "OOF") return "OFF";
+  if (upper === "0" || upper === "OFF" || upper === "OOF") return "OFF";
   if (["CL", "CLOSE", "CLOSING"].includes(upper)) return "CLOSE";
 
   value = value.replace(/[.;]/g, ":");
 
-  let match = value.match(/^(\d{1,2})(?::(\d{1,2}))?\s*([AP]M)?$/i);
+  let match = value.match(/^\d{3,4}$/);
+  if (match) {
+    let hour = Number(value.slice(0, -2));
+    let minute = Number(value.slice(-2));
+    if (hour <= 23 && minute < 60) {
+      if (hour <= 7) hour += 12;
+      return formatTime(hour, minute, format);
+    }
+  }
+
+  match = value.match(/^(\d{1,2})(?::(\d{1,2}))?\s*([AP]M)?$/i);
   if (match) {
     let hour = Number(match[1]);
     let minute = Number(match[2] || 0);
@@ -59,16 +69,6 @@ function normalizeOneTime(raw, format) {
     if (hour <= 23) return formatTime(hour, minute, format);
   }
 
-  match = value.match(/^\d{3,4}$/);
-  if (match) {
-    let hour = Number(value.slice(0, -2));
-    let minute = Number(value.slice(-2));
-    if (hour <= 23 && minute < 60) {
-      if (hour <= 7) hour += 12;
-      return formatTime(hour, minute, format);
-    }
-  }
-
   return upper;
 }
 
@@ -76,7 +76,7 @@ function normalizeShift(raw, format) {
   const value = String(raw || "").trim();
   if (!value) return "";
   const upper = value.toUpperCase();
-  if (upper === "OFF" || upper === "OOF") return "OFF";
+  if (upper === "0" || upper === "OFF" || upper === "OOF") return "OFF";
   if (["CL", "CLOSE", "CLOSING"].includes(upper)) return "CLOSE";
 
   const pieces = value.split(/\s*(?:-|–|—|;)\s*/).filter(Boolean);
