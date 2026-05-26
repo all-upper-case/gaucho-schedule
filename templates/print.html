@@ -26,7 +26,7 @@
           {% for emp in employees %}
             <tr>
               <th>{{ emp.name }}</th>
-              {% for i in range(7) %}<td>{{ shifts.get((emp.id, i), 'OFF') }}</td>{% endfor %}
+              {% for i in range(7) %}<td data-original-value="{{ shifts.get((emp.id, i), 'OFF') }}">{{ shifts.get((emp.id, i), 'OFF') }}</td>{% endfor %}
             </tr>
           {% endfor %}
         </tbody>
@@ -37,5 +37,6 @@
   <div class="signature-row">
     <span>Manager Signature</span><span>Date</span><span>Employee Signature</span>
   </div>
+  <script src="/static/app.js"></script>
 </body>
 </html>
