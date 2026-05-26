@@ -24,11 +24,7 @@
 </section>
 {% endif %}
 
-<form action="/week/{{ week_start.isoformat() }}/save" method="post">
-  <datalist id="shift-options">
-    {% for option in shift_options %}<option value="{{ option }}"></option>{% endfor %}
-  </datalist>
-
+<form action="/week/{{ week_start.isoformat() }}/save" method="post" class="schedule-form">
   {% for role, employees in grouped %}
     <section class="role-card">
       <table class="schedule-table">
@@ -43,7 +39,23 @@
             <tr>
               <th class="employee-name">{{ emp.name }}</th>
               {% for i in range(7) %}
-                <td><input name="shift_{{ emp.id }}_{{ i }}" value="{{ shifts.get((emp.id, i), 'OFF') }}" list="shift-options"></td>
+                {% set list_id = 'options_' ~ emp.id ~ '_' ~ i %}
+                <td>
+                  <input
+                    class="shift-input"
+                    name="shift_{{ emp.id }}_{{ i }}"
+                    value="{{ shifts.get((emp.id, i), 'OFF') }}"
+                    list="{{ list_id }}"
+                    autocomplete="off"
+                    data-row="{{ loop.parent.loop.index0 }}"
+                    data-col="{{ i }}"
+                    data-employee-id="{{ emp.id }}"
+                    data-day-index="{{ i }}"
+                  >
+                  <datalist id="{{ list_id }}">
+                    {% for option in suggestions.get((emp.id, i), []) %}<option value="{{ option }}"></option>{% endfor %}
+                  </datalist>
+                </td>
               {% endfor %}
             </tr>
           {% endfor %}
@@ -54,7 +66,7 @@
 
   <div class="sticky-save">
     <button type="submit">Save Schedule</button>
-    <span class="muted">Tip: use OFF, 2:30 PM, 10:00 AM-4:00 PM, or CLOSE.</span>
+    <span class="muted">Click a cell and type shorthand like 3, 300, 15, 1500, 3:00, or 15:00. The cell will autocorrect when you leave it.</span>
   </div>
 </form>
 {% endblock %}
