@@ -11,6 +11,8 @@ const DEFAULT_PREFS = {
 };
 
 let activeInput = null;
+let menuHideTimer = null;
+let lastSavedValues = new WeakMap();
 
 function loadPrefs() {
   try {
@@ -24,17 +26,13 @@ function savePrefs(prefs) {
   localStorage.setItem("gauchoSchedulePrefs", JSON.stringify(prefs));
 }
 
-function pad2(value) {
-  return String(value).padStart(2, "0");
-}
+function pad2(value) { return String(value).padStart(2, "0"); }
 
 function formatTime(hour, minute, format) {
   hour = ((hour % 24) + 24) % 24;
   minute = minute || 0;
   if (format === "24h") return `${pad2(hour)}:${pad2(minute)}`;
-  const suffix = hour < 12 ? "AM" : "PM";
-  const h12 = hour % 12 || 12;
-  return `${h12}:${pad2(minute)} ${suffix}`;
+  return `${hour % 12 || 12}:${pad2(minute)} ${hour < 12 ? "AM" : "PM"}`;
 }
 
 function normalizeOneTime(raw, format) {
@@ -43,7 +41,6 @@ function normalizeOneTime(raw, format) {
   const upper = value.toUpperCase();
   if (upper === "0" || upper === "OFF" || upper === "OOF") return "OFF";
   if (["CL", "CLOSE", "CLOSING"].includes(upper)) return "CLOSE";
-
   value = value.replace(/[.;]/g, ":");
 
   let match = value.match(/^\d{3,4}$/);
@@ -76,18 +73,14 @@ function normalizeShift(raw, format) {
   const upper = value.toUpperCase();
   if (upper === "0" || upper === "OFF" || upper === "OOF") return "OFF";
   if (["CL", "CLOSE", "CLOSING"].includes(upper)) return "CLOSE";
-
   const pieces = value.split(/\s*(?:-|–|—|;)\s*/).filter(Boolean);
-  if (pieces.length === 2) {
-    return `${normalizeOneTime(pieces[0], format)}-${normalizeOneTime(pieces[1], format)}`;
-  }
+  if (pieces.length === 2) return `${normalizeOneTime(pieces[0], format)}-${normalizeOneTime(pieces[1], format)}`;
   return normalizeOneTime(value, format);
 }
 
 function applyVisualPrefs(prefs) {
   document.documentElement.style.setProperty("--editor-font-size", `${prefs.fontSize}px`);
   document.documentElement.style.setProperty("--editor-zoom", String(Number(prefs.zoom) / 100));
-
   if (document.body.classList.contains("print-page")) {
     document.querySelectorAll(".print-table td").forEach((cell) => {
       const original = cell.dataset.originalValue || cell.textContent.trim();
@@ -108,9 +101,7 @@ function focusAndSelect(input) {
   requestAnimationFrame(() => input.select());
 }
 
-function visibleShiftInputs() {
-  return Array.from(document.querySelectorAll(".shift-input"));
-}
+function visibleShiftInputs() { return Array.from(document.querySelectorAll(".shift-input")); }
 
 function moveFrom(input, direction) {
   const inputs = visibleShiftInputs();
@@ -125,6 +116,60 @@ function moveFrom(input, direction) {
   focusAndSelect(target);
 }
 
+function setAutosaveStatus(text, mode = "saved") {
+  const status = document.getElementById("autosave-status");
+  if (!status) return;
+  status.textContent = text;
+  status.dataset.mode = mode;
+}
+
+async function postJson(url, payload = {}) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return await response.json();
+}
+
+async function patchJson(url, payload = {}) {
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return await response.json();
+}
+
+function currentWeekStart() {
+  return document.querySelector("[data-week-start]")?.dataset.weekStart || null;
+}
+
+async function autosaveShift(input, force = false) {
+  const weekStart = currentWeekStart();
+  if (!weekStart || !input) return;
+  const normalized = loadPrefs().autocorrect === "on" ? normalizeShift(input.value, loadPrefs().timeFormat) : input.value.trim();
+  input.value = normalized || "OFF";
+  if (!force && lastSavedValues.get(input) === input.value) return;
+
+  setAutosaveStatus("Saving…", "saving");
+  try {
+    const result = await postJson(`/api/week/${weekStart}/shift`, {
+      employee_id: input.dataset.employeeId,
+      day_index: input.dataset.dayIndex,
+      label: input.value
+    });
+    if (result.label) input.value = result.label;
+    lastSavedValues.set(input, input.value);
+    setAutosaveStatus("Saved", "saved");
+  } catch (error) {
+    console.error(error);
+    setAutosaveStatus("Autosave failed", "error");
+  }
+}
+
 function optionsForInput(input) {
   try {
     const parsed = JSON.parse(input.dataset.options || "[]");
@@ -133,46 +178,45 @@ function optionsForInput(input) {
   return ["3:00 PM", "4:00 PM", "5:00 PM", "2:30 PM", "10:00 AM", "10:30 AM", "OFF"];
 }
 
-function getSmartMenu() {
-  return document.getElementById("smart-shift-menu");
-}
+function getSmartMenu() { return document.getElementById("smart-shift-menu"); }
 
 function hideSmartMenu() {
   const menu = getSmartMenu();
   if (menu) menu.hidden = true;
 }
 
+function scheduleHideSmartMenu(delay = 220) {
+  clearTimeout(menuHideTimer);
+  menuHideTimer = setTimeout(hideSmartMenu, delay);
+}
+
 function showSmartMenu(input, force = false) {
+  clearTimeout(menuHideTimer);
   const prefs = loadPrefs();
   if (prefs.dropdownBehavior === "off") return;
   const menu = getSmartMenu();
   if (!menu) return;
-
-  const rawOptions = optionsForInput(input);
+  const basic = ["OFF", "9:00 AM", "10:00 AM", "10:30 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "2:30 PM", "3:00 PM", "4:00 PM", "5:00 PM", "CLOSE"];
+  const rawOptions = prefs.dropdownBehavior === "basic" ? basic : optionsForInput(input);
   const filter = input.value.trim().toUpperCase();
-  const options = (prefs.dropdownBehavior === "basic" ? ["OFF", "9:00 AM", "10:00 AM", "10:30 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "2:30 PM", "3:00 PM", "4:00 PM", "5:00 PM", "CLOSE"] : rawOptions)
-    .filter((option) => force || !filter || option.toUpperCase().includes(filter) || filter === "OFF");
-
+  const options = rawOptions.filter((option) => force || !filter || option.toUpperCase().includes(filter) || filter === "OFF");
   menu.innerHTML = "";
-  if (!options.length) {
-    menu.hidden = true;
-    return;
-  }
-
+  if (!options.length) { menu.hidden = true; return; }
   options.slice(0, 18).forEach((option, index) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "smart-option";
     button.innerHTML = `<span>${option}</span>${index === 0 ? '<small>best</small>' : ''}`;
-    button.addEventListener("mousedown", (event) => {
+    button.addEventListener("mousedown", async (event) => {
       event.preventDefault();
+      clearTimeout(menuHideTimer);
       input.value = option;
       hideSmartMenu();
       focusAndSelect(input);
+      await autosaveShift(input, true);
     });
     menu.appendChild(button);
   });
-
   const rect = input.getBoundingClientRect();
   menu.style.minWidth = `${Math.max(160, rect.width + 26)}px`;
   menu.style.left = `${rect.left + window.scrollX}px`;
@@ -180,45 +224,36 @@ function showSmartMenu(input, force = false) {
   menu.hidden = false;
 }
 
-function normalizeActiveInput(input) {
-  if (loadPrefs().autocorrect === "on") {
-    input.value = normalizeShift(input.value, loadPrefs().timeFormat);
-  }
-}
-
-function setupScheduleEditor(prefs) {
+function setupScheduleEditor() {
   const inputs = visibleShiftInputs();
   if (!inputs.length) return;
-
   inputs.forEach((input) => {
+    lastSavedValues.set(input, input.value);
     input.addEventListener("focus", () => {
       activeInput = input;
+      clearTimeout(menuHideTimer);
       input.closest("tr")?.classList.add("active-row");
       input.select();
       showSmartMenu(input, true);
     });
-    input.addEventListener("click", () => {
-      input.select();
-      showSmartMenu(input, true);
-    });
+    input.addEventListener("click", () => { input.select(); showSmartMenu(input, true); });
     input.addEventListener("mouseup", (event) => event.preventDefault());
     input.addEventListener("input", () => showSmartMenu(input, false));
-    input.addEventListener("blur", () => {
-      normalizeActiveInput(input);
+    input.addEventListener("blur", async () => {
       input.closest("tr")?.classList.remove("active-row");
-      setTimeout(hideSmartMenu, 120);
+      await autosaveShift(input);
+      scheduleHideSmartMenu();
     });
-
     input.addEventListener("keydown", (event) => {
-      const currentPrefs = loadPrefs();
+      const prefs = loadPrefs();
       let action = null;
-      if (event.key === "Enter") action = currentPrefs.enterKey;
-      if (event.key === "ArrowDown") action = currentPrefs.downKey;
+      if (event.key === "Enter") action = prefs.enterKey;
+      if (event.key === "ArrowDown") action = prefs.downKey;
       if (event.key === "ArrowUp") action = "up";
       if (event.key === "ArrowLeft") action = "left";
       if (event.key === "ArrowRight") action = "right";
-      if (event.key === " " || event.code === "Space") action = currentPrefs.spaceKey;
-      if (event.key === "Tab" && currentPrefs.tabKey === "right") action = event.shiftKey ? "left" : "right";
+      if (event.key === " " || event.code === "Space") action = prefs.spaceKey;
+      if (event.key === "Tab" && prefs.tabKey === "right") action = event.shiftKey ? "left" : "right";
       if (event.key === "Escape") hideSmartMenu();
       if ((event.altKey || event.metaKey) && event.key === "ArrowDown") {
         event.preventDefault();
@@ -227,75 +262,170 @@ function setupScheduleEditor(prefs) {
       }
       if (action && action !== "none" && action !== "browser") {
         event.preventDefault();
-        normalizeActiveInput(input);
+        autosaveShift(input, true);
         hideSmartMenu();
         moveFrom(input, action);
       }
     });
   });
-
   document.querySelectorAll(".cell-menu-button").forEach((button) => {
     button.addEventListener("mousedown", (event) => {
       event.preventDefault();
+      clearTimeout(menuHideTimer);
       const input = button.closest(".shift-cell-wrap")?.querySelector(".shift-input");
       if (input) {
         focusAndSelect(input);
-        showSmartMenu(input, true);
+        setTimeout(() => showSmartMenu(input, true), 0);
       }
     });
+  });
+  setupBulkScheduleButtons();
+}
+
+function applyShiftPayload(shifts) {
+  Object.entries(shifts || {}).forEach(([name, value]) => {
+    const input = document.querySelector(`[name="${CSS.escape(name)}"]`);
+    if (input) {
+      input.value = value;
+      lastSavedValues.set(input, value);
+    }
+  });
+}
+
+function setupBulkScheduleButtons() {
+  const weekStart = currentWeekStart();
+  if (!weekStart) return;
+  document.getElementById("fill-best-times")?.addEventListener("click", async () => {
+    if (!confirm("Fill every visible schedule cell with its best-known time?")) return;
+    setAutosaveStatus("Filling…", "saving");
+    try {
+      const result = await postJson(`/api/week/${weekStart}/fill-best`, {});
+      applyShiftPayload(result.shifts);
+      setAutosaveStatus("Saved", "saved");
+    } catch (error) {
+      console.error(error);
+      setAutosaveStatus("Fill failed", "error");
+    }
+  });
+  document.getElementById("copy-previous-week")?.addEventListener("click", async () => {
+    if (!confirm("Replace this week with the exact same schedule as the previous week?")) return;
+    setAutosaveStatus("Copying…", "saving");
+    try {
+      const result = await postJson(`/api/week/${weekStart}/copy-previous`, {});
+      applyShiftPayload(result.shifts);
+      setAutosaveStatus("Saved", "saved");
+    } catch (error) {
+      console.error(error);
+      setAutosaveStatus("Copy failed", "error");
+    }
   });
 }
 
 function setupPreferencesPage(prefs) {
   const form = document.getElementById("preferences-form");
   if (!form) return;
-  form.querySelectorAll("[data-pref]").forEach((field) => {
-    field.value = prefs[field.dataset.pref] ?? DEFAULT_PREFS[field.dataset.pref];
-  });
+  form.querySelectorAll("[data-pref]").forEach((field) => { field.value = prefs[field.dataset.pref] ?? DEFAULT_PREFS[field.dataset.pref]; });
   updatePrefOutputs(prefs);
-  form.addEventListener("input", () => {
-    const next = collectPrefs(form);
-    updatePrefOutputs(next);
-    applyVisualPrefs(next);
-  });
-  document.getElementById("save-preferences")?.addEventListener("click", () => {
-    const next = collectPrefs(form);
-    savePrefs(next);
-    applyVisualPrefs(next);
-    alert("Preferences saved.");
-  });
-  document.getElementById("reset-preferences")?.addEventListener("click", () => {
-    savePrefs(DEFAULT_PREFS);
-    window.location.reload();
-  });
+  form.addEventListener("input", () => { const next = collectPrefs(form); updatePrefOutputs(next); applyVisualPrefs(next); });
+  document.getElementById("save-preferences")?.addEventListener("click", () => { const next = collectPrefs(form); savePrefs(next); applyVisualPrefs(next); alert("Preferences saved."); });
+  document.getElementById("reset-preferences")?.addEventListener("click", () => { savePrefs(DEFAULT_PREFS); window.location.reload(); });
 }
 
 function collectPrefs(form) {
   const prefs = { ...DEFAULT_PREFS };
-  form.querySelectorAll("[data-pref]").forEach((field) => {
-    prefs[field.dataset.pref] = field.value;
-  });
+  form.querySelectorAll("[data-pref]").forEach((field) => { prefs[field.dataset.pref] = field.value; });
   return prefs;
 }
 
 function updatePrefOutputs(prefs) {
   document.querySelectorAll("[data-pref-output]").forEach((output) => {
     const key = output.dataset.prefOutput;
-    const suffix = key === "zoom" ? "%" : key === "fontSize" ? "px" : "";
-    output.textContent = `${prefs[key]}${suffix}`;
+    output.textContent = `${prefs[key]}${key === "zoom" ? "%" : key === "fontSize" ? "px" : ""}`;
   });
 }
 
 function setupSubmitAutocorrect() {
   document.querySelectorAll("form.schedule-form").forEach((form) => {
     form.addEventListener("submit", () => {
-      const prefs = loadPrefs();
-      if (prefs.autocorrect !== "on") return;
-      form.querySelectorAll(".shift-input").forEach((input) => {
-        input.value = normalizeShift(input.value, prefs.timeFormat);
-      });
+      if (loadPrefs().autocorrect !== "on") return;
+      form.querySelectorAll(".shift-input").forEach((input) => { input.value = normalizeShift(input.value, loadPrefs().timeFormat); });
     });
   });
+}
+
+function debounce(fn, delay = 450) {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
+function setupEmployeesPage() {
+  const board = document.querySelector(".employee-board");
+  if (!board) return;
+  const saveName = debounce(async (input) => {
+    try { await patchJson(`/api/employees/${input.dataset.employeeId}`, { name: input.value }); input.classList.remove("is-saving"); }
+    catch (error) { console.error(error); input.classList.add("save-error"); }
+  });
+
+  document.querySelectorAll(".employee-name-input").forEach((input) => {
+    input.addEventListener("input", () => { input.classList.add("is-saving"); saveName(input); });
+    input.addEventListener("blur", () => saveName(input));
+  });
+
+  document.getElementById("add-employee-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form).entries());
+    await postJson("/api/employees/add", data);
+    window.location.reload();
+  });
+
+  document.querySelectorAll(".archive-employee-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!confirm("Archive this employee and hide them from the schedule?")) return;
+      await postJson(`/api/employees/${button.dataset.employeeId}/archive`, {});
+      window.location.reload();
+    });
+  });
+  document.querySelectorAll(".unarchive-employee-button").forEach((button) => {
+    button.addEventListener("click", async () => { await postJson(`/api/employees/${button.dataset.employeeId}/unarchive`, {}); window.location.reload(); });
+  });
+
+  let dragged = null;
+  document.querySelectorAll(".employee-card").forEach((card) => {
+    card.addEventListener("dragstart", () => { dragged = card; card.classList.add("dragging"); });
+    card.addEventListener("dragend", () => { card.classList.remove("dragging"); dragged = null; saveEmployeeOrder(); });
+  });
+  document.querySelectorAll(".employee-dropzone").forEach((zone) => {
+    zone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      const after = getDragAfterElement(zone, event.clientY);
+      if (!dragged) return;
+      if (after == null) zone.appendChild(dragged);
+      else zone.insertBefore(dragged, after);
+    });
+  });
+}
+
+function getDragAfterElement(container, y) {
+  const cards = [...container.querySelectorAll(".employee-card:not(.dragging)")];
+  return cards.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+    return closest;
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+async function saveEmployeeOrder() {
+  const roles = {};
+  document.querySelectorAll(".employee-dropzone").forEach((zone) => {
+    roles[zone.dataset.roleId] = [...zone.querySelectorAll(".employee-card")].map((card) => card.dataset.employeeId);
+  });
+  try { await postJson("/api/employees/reorder", { roles }); }
+  catch (error) { console.error(error); alert("Could not save the new employee order."); }
 }
 
 document.addEventListener("mousedown", (event) => {
@@ -307,7 +437,8 @@ document.addEventListener("mousedown", (event) => {
 document.addEventListener("DOMContentLoaded", () => {
   const prefs = loadPrefs();
   applyVisualPrefs(prefs);
-  setupScheduleEditor(prefs);
+  setupScheduleEditor();
   setupPreferencesPage(prefs);
   setupSubmitAutocorrect();
+  setupEmployeesPage();
 });
