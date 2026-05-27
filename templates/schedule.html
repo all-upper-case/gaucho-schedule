@@ -15,6 +15,10 @@
   </div>
 </div>
 
+<section class="quick-help">
+  <strong>Fast entry:</strong> click a cell and type shorthand like <code>3</code>, <code>300</code>, <code>15</code>, <code>1500</code>, or <code>10;1600</code>. It autocorrects when you leave the cell. Press <kbd>Enter</kbd> or <kbd>↓</kbd> to move down; <kbd>Tab</kbd>, <kbd>Space</kbd>, or <kbd>→</kbd> to move right.
+</section>
+
 {% if warnings %}
 <section class="warning-box">
   <h2>Things to double-check before printing</h2>
@@ -39,21 +43,20 @@
             <tr>
               <th class="employee-name">{{ emp.name }}</th>
               {% for i in range(7) %}
-                {% set list_id = 'options_' ~ emp.id ~ '_' ~ i %}
                 <td>
-                  <input
-                    class="shift-input"
-                    name="shift_{{ emp.id }}_{{ i }}"
-                    value="{{ shifts.get((emp.id, i), 'OFF') }}"
-                    list="{{ list_id }}"
-                    autocomplete="off"
-                    data-col="{{ i }}"
-                    data-employee-id="{{ emp.id }}"
-                    data-day-index="{{ i }}"
-                  >
-                  <datalist id="{{ list_id }}">
-                    {% for option in suggestions.get((emp.id, i), []) %}<option value="{{ option }}"></option>{% endfor %}
-                  </datalist>
+                  <div class="shift-cell-wrap">
+                    <input
+                      class="shift-input"
+                      name="shift_{{ emp.id }}_{{ i }}"
+                      value="{{ shifts.get((emp.id, i), 'OFF') }}"
+                      autocomplete="off"
+                      data-col="{{ i }}"
+                      data-employee-id="{{ emp.id }}"
+                      data-day-index="{{ i }}"
+                      data-options='{{ suggestions.get((emp.id, i), []) | tojson }}'
+                    >
+                    <button class="cell-menu-button" type="button" title="Show options">▾</button>
+                  </div>
                 </td>
               {% endfor %}
             </tr>
@@ -65,7 +68,8 @@
 
   <div class="sticky-save">
     <button type="submit">Save Schedule</button>
-    <span class="muted">Click a cell and type shorthand like 3, 300, 15, 1500, 3:00, or 15:00. The cell will autocorrect when you leave it.</span>
+    <span class="muted">The dropdown now shows smart options even when the current cell says OFF.</span>
   </div>
 </form>
+<div id="smart-shift-menu" class="smart-shift-menu" hidden></div>
 {% endblock %}
