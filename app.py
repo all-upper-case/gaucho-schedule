@@ -333,7 +333,7 @@ def index():
         week_rows = db.execute("SELECT * FROM weeks ORDER BY start_date DESC LIMIT 12").fetchall()
         history_rows = db.execute("SELECT COUNT(*) FROM shift_history").fetchone()[0]
         history_times = db.execute("SELECT COUNT(*) FROM shift_history WHERE label != 'OFF'").fetchone()[0]
-    return render_template("index.html", weeks=week_rows, current_week=current, week_nav=surrounding_weeks(current), history_rows=history_rows, history_times=history_times)
+    return render_template("index.html", weeks=week_rows, current_week=current, week_nav=surrounding_weeks(current), seven_days=timedelta(days=6), history_rows=history_rows, history_times=history_times)
 
 @app.route("/week", methods=["POST"])
 def go_to_week():
