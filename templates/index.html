@@ -20,8 +20,8 @@
     {% for wk in week_nav %}
       <a class="week-tile {% if wk == current_week %}current{% endif %}" href="/week/{{ wk.isoformat() }}">
         <span class="week-tile-label">{% if wk == current_week %}This week{% elif wk < current_week %}Previous{% else %}Upcoming{% endif %}</span>
-        <strong>{{ wk.strftime('%b %-d') if wk.strftime else wk }}</strong>
-        <small>{{ wk.strftime('%m/%d') }}–{{ (wk.replace() + delta6).strftime('%m/%d') if delta6 is defined else '' }}</small>
+        <strong>{{ wk.strftime('%b %d') }}</strong>
+        <small>{{ wk.strftime('%m/%d') }}–{{ (wk + seven_days).strftime('%m/%d') }}</small>
       </a>
     {% endfor %}
   </div>
