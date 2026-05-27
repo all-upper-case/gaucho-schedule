@@ -15,8 +15,20 @@
   </div>
 </div>
 
+<section class="toolbar-card" data-week-start="{{ week_start.isoformat() }}">
+  <div>
+    <strong>Build this week quickly</strong>
+    <p>These buttons autosave immediately.</p>
+  </div>
+  <div class="actions">
+    <button type="button" id="fill-best-times">Fill Everyone’s Best Time</button>
+    <button type="button" id="copy-previous-week" class="secondary">Use Same Schedule as Previous Week</button>
+    <span id="autosave-status" class="autosave-status">Saved</span>
+  </div>
+</section>
+
 <section class="quick-help">
-  <strong>Fast entry:</strong> click a cell and type shorthand like <code>3</code>, <code>300</code>, <code>15</code>, <code>1500</code>, or <code>10;1600</code>. It autocorrects when you leave the cell. Press <kbd>Enter</kbd> or <kbd>↓</kbd> to move down; <kbd>Tab</kbd>, <kbd>Space</kbd>, or <kbd>→</kbd> to move right.
+  <strong>Fast entry:</strong> click a cell and type shorthand like <code>3</code>, <code>300</code>, <code>15</code>, <code>1500</code>, or <code>10;1600</code>. It autocorrects and autosaves when you leave the cell. Press <kbd>Enter</kbd> or <kbd>↓</kbd> to move down; <kbd>Tab</kbd>, <kbd>Space</kbd>, or <kbd>→</kbd> to move right.
 </section>
 
 {% if warnings %}
@@ -68,7 +80,7 @@
 
   <div class="sticky-save">
     <button type="submit">Save Schedule</button>
-    <span class="muted">The dropdown now shows smart options even when the current cell says OFF.</span>
+    <span class="muted">Autosave is active; the Save button is just a manual backup.</span>
   </div>
 </form>
 <div id="smart-shift-menu" class="smart-shift-menu" hidden></div>
