@@ -1,31 +1,49 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card narrow">
-  <h1>Open a schedule week</h1>
-  <p>Pick any date in the week. The app will automatically use that week's Monday.</p>
-  <form action="/week" method="post" class="inline-form">
-    <input type="date" name="week_start" value="{{ current_week.isoformat() }}">
+<section class="hero-card">
+  <div>
+    <h1>Weekly Schedule</h1>
+    <p>Open a week, copy the prior week, fill best-known times, print, or export.</p>
+  </div>
+  <form action="/week" method="post" class="week-jump-form">
+    <label>Jump to date <input type="date" name="week_start" value="{{ current_week.isoformat() }}"></label>
     <button type="submit">Open Week</button>
   </form>
 </section>
 
-<section class="card narrow">
+<section class="card">
+  <div class="section-title-row">
+    <h2>Quick week picker</h2>
+    <span class="muted">Each tile opens the Monday-starting week.</span>
+  </div>
+  <div class="week-tile-grid">
+    {% for wk in week_nav %}
+      <a class="week-tile {% if wk == current_week %}current{% endif %}" href="/week/{{ wk.isoformat() }}">
+        <span class="week-tile-label">{% if wk == current_week %}This week{% elif wk < current_week %}Previous{% else %}Upcoming{% endif %}</span>
+        <strong>{{ wk.strftime('%b %-d') if wk.strftime else wk }}</strong>
+        <small>{{ wk.strftime('%m/%d') }}–{{ (wk.replace() + delta6).strftime('%m/%d') if delta6 is defined else '' }}</small>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card status-card">
   <h2>Dropdown history</h2>
   {% if history_rows %}
-    <p>{{ history_rows }} historical shift entries are available for smart dropdown suggestions.</p>
+    <p><strong>{{ history_times }}</strong> working-time entries and <strong>{{ history_rows }}</strong> total historical shift entries are available for smart dropdown suggestions.</p>
   {% else %}
     <p>No workbook history has been imported yet. Use <a href="/import-history">Import History</a> to upload the old Excel schedule workbook.</p>
   {% endif %}
 </section>
 
-<section class="card narrow">
-  <h2>Recent weeks</h2>
+<section class="card">
+  <h2>Recent saved/opened weeks</h2>
   {% if weeks %}
-    <ul class="week-list">
+    <div class="recent-week-list">
       {% for week in weeks %}
-        <li><a href="/week/{{ week.start_date }}">Week of {{ week.start_date }}</a></li>
+        <a href="/week/{{ week.start_date }}">Week of {{ week.start_date }}</a>
       {% endfor %}
-    </ul>
+    </div>
   {% else %}
     <p>No weeks have been created yet.</p>
   {% endif %}
