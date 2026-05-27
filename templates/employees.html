@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card">
-  <h1>Employees</h1>
-  <form method="post" class="add-employee">
-    <input type="hidden" name="action" value="add">
+<section class="hero-card">
+  <div>
+    <h1>Employees</h1>
+    <p>Changes autosave. Drag employees within or between job categories to reorder them.</p>
+  </div>
+  <form id="add-employee-form" class="add-employee autosave-add-form">
     <input name="name" placeholder="Employee name" required>
     <select name="role_id">
       {% for role in roles %}<option value="{{ role.id }}">{{ role.title }} {{ role.subtitle }}</option>{% endfor %}
@@ -12,24 +14,45 @@
   </form>
 </section>
 
-<section class="card">
-  <h2>Edit employee list</h2>
-  <div class="employee-grid">
-    {% for emp in employees %}
-      <form method="post" class="employee-row">
-        <input type="hidden" name="action" value="update">
-        <input type="hidden" name="employee_id" value="{{ emp.id }}">
-        <input name="name" value="{{ emp.name }}">
-        <select name="role_id">
-          {% for role in roles %}
-            <option value="{{ role.id }}" {% if role.id == emp.role_id %}selected{% endif %}>{{ role.title }} {{ role.subtitle }}</option>
-          {% endfor %}
-        </select>
-        <label><input type="checkbox" name="active" {% if emp.active %}checked{% endif %}> Active</label>
-        <input class="order" type="number" name="display_order" value="{{ emp.display_order }}" title="Display order">
-        <button type="submit">Save</button>
-      </form>
-    {% endfor %}
-  </div>
+<section class="employee-board">
+  {% for role, employees in grouped %}
+    <section class="employee-role-card" data-role-id="{{ role.id }}">
+      <div class="role-card-heading">
+        <h2>{{ role.title }} <span>{{ role.subtitle }}</span></h2>
+        <small>{{ employees|length }} active</small>
+      </div>
+      <div class="employee-dropzone" data-role-id="{{ role.id }}">
+        {% for emp in employees %}
+          <article class="employee-card" draggable="true" data-employee-id="{{ emp.id }}">
+            <span class="drag-handle" title="Drag to reorder">☰</span>
+            <input class="employee-name-input" value="{{ emp.name }}" data-employee-id="{{ emp.id }}" aria-label="Employee name">
+            <button type="button" class="archive-employee-button secondary" data-employee-id="{{ emp.id }}">Archive</button>
+          </article>
+        {% else %}
+          <div class="empty-role-note">No active employees in this category.</div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+</section>
+
+<section class="card archived-section">
+  <h2>Archived employees</h2>
+  <p class="muted">Archived employees are hidden from the schedule editor. Restore them here if they return.</p>
+  {% set any_archived = false %}
+  {% for role, employees in archived_grouped %}
+    {% if employees %}
+      <div class="archived-group">
+        <h3>{{ role.title }} {{ role.subtitle }}</h3>
+        {% for emp in employees %}
+          <article class="archived-employee-card" data-employee-id="{{ emp.id }}">
+            <strong>{{ emp.name }}</strong>
+            <span>Archived {{ emp.archived_at or 'unknown date' }}</span>
+            <button type="button" class="unarchive-employee-button" data-employee-id="{{ emp.id }}">Restore</button>
+          </article>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endfor %}
 </section>
 {% endblock %}
