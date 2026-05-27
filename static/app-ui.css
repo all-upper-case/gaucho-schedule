@@ -3,6 +3,25 @@
   --editor-zoom: 1;
 }
 
+.quick-help {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0 0 18px;
+  color: #374151;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+.quick-help code,
+.quick-help kbd {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-family: Consolas, monospace;
+}
+
 .schedule-form {
   font-size: var(--editor-font-size);
   transform: scale(var(--editor-zoom));
@@ -10,8 +29,75 @@
   width: calc(100% / var(--editor-zoom));
 }
 
+.schedule-table tbody tr.active-row th,
+.schedule-table tbody tr.active-row td {
+  background: #eef6ff;
+}
+
+.shift-cell-wrap {
+  display: grid;
+  grid-template-columns: 1fr 24px;
+  gap: 3px;
+  align-items: center;
+}
+
 .schedule-table input.shift-input {
   font-size: var(--editor-font-size);
+  min-height: 34px;
+  border-radius: 6px;
+}
+
+.cell-menu-button {
+  min-width: 24px;
+  height: 34px;
+  padding: 0;
+  border-radius: 6px;
+  background: #e5e7eb;
+  color: #111827;
+  font-size: 13px;
+}
+
+.cell-menu-button:hover {
+  background: #d1d5db;
+}
+
+.smart-shift-menu {
+  position: absolute;
+  z-index: 1000;
+  max-height: 320px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #b8c4d0;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0,0,0,.18);
+  padding: 6px;
+}
+
+.smart-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: white;
+  color: #111827;
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.smart-option:hover,
+.smart-option:focus {
+  background: #eaf4ff;
+}
+
+.smart-option small {
+  color: #6b7280;
+  font-weight: 700;
+  margin-left: 16px;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: .04em;
 }
 
 .stacked-form {
