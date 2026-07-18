@@ -441,6 +441,52 @@ function setupEmployeesPage() {
   });
 }
 
+function setupPosImportPreview() {
+  const form = document.getElementById("pos-import-form");
+  if (!form) return;
+
+  function syncEmployeeCard(card) {
+    const choice = card.querySelector(".pos-employee-choice");
+    const newName = card.querySelector(".new-schedule-name input");
+    const ignored = choice?.value === "ignore";
+    const creating = choice?.value === "create";
+    if (newName) {
+      newName.disabled = !creating;
+      newName.required = creating;
+    }
+    card.querySelectorAll(".pair-role-choice").forEach((select) => {
+      select.disabled = ignored;
+      select.required = !ignored;
+    });
+    card.classList.toggle("is-ignored", ignored);
+  }
+
+  document.querySelectorAll(".employee-mapping-card").forEach((card) => {
+    syncEmployeeCard(card);
+    card.querySelector(".pos-employee-choice")?.addEventListener("change", () => syncEmployeeCard(card));
+  });
+
+  document.querySelectorAll(".job-default-select").forEach((select) => {
+    select.dataset.previousValue = select.value;
+    select.addEventListener("change", () => {
+      const previous = select.dataset.previousValue || "";
+      document.querySelectorAll(".pair-role-choice").forEach((pairSelect) => {
+        if (pairSelect.dataset.posJob === select.dataset.jobName && (!pairSelect.value || pairSelect.value === previous)) {
+          pairSelect.value = select.value;
+        }
+      });
+      select.dataset.previousValue = select.value;
+    });
+  });
+
+  document.getElementById("expand-all-mappings")?.addEventListener("click", (event) => {
+    const cards = [...document.querySelectorAll(".employee-mapping-card")];
+    const shouldOpen = cards.some((card) => !card.open);
+    cards.forEach((card) => { card.open = shouldOpen; });
+    event.currentTarget.textContent = shouldOpen ? "Collapse All" : "Expand All";
+  });
+}
+
 function getDragAfterElement(container, y) {
   const cards = [...container.querySelectorAll(".employee-card:not(.dragging)")];
   return cards.reduce((closest, child) => {
@@ -473,4 +519,5 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPreferencesPage(prefs);
   setupSubmitAutocorrect();
   setupEmployeesPage();
+  setupPosImportPreview();
 });

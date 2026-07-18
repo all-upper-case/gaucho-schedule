@@ -6,6 +6,7 @@ venv/
 instance/
 data/*.sqlite3
 data/*.db
+data/staged_pos_imports/
 *.log
 .DS_Store
 build/

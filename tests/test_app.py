@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 import app as schedule_app
@@ -45,6 +46,21 @@ class GauchoScheduleTests(unittest.TestCase):
         rows = schedule_app.coverage_data(grouped, shifts)
         matching = next(row for row in rows if row[0].id == 1)
         self.assertEqual(matching[1][0], 1)
+
+    def test_pos_classifier_ignores_meal_reclock_and_keeps_split_start(self):
+        rows = [
+            {"Employee": "Smith, Alex", "Job": "Kitchen Aid", "_date": date(2026, 7, 1), "_in": 9 * 60, "_out": 12 * 60, "_line": 2},
+            {"Employee": "Smith, Alex", "Job": "Kitchen Aid", "_date": date(2026, 7, 1), "_in": 12 * 60 + 30, "_out": 14 * 60, "_line": 3},
+            {"Employee": "Smith, Alex", "Job": "Kitchen Aid", "_date": date(2026, 7, 1), "_in": 16 * 60, "_out": 21 * 60, "_line": 4},
+        ]
+        patterns, stats = schedule_app.classify_pos_starts(rows)
+        self.assertEqual([pattern["label"] for pattern in patterns], ["9:00 AM / 4:00 PM"])
+        self.assertEqual(stats["meal_or_reclock"], 1)
+        self.assertEqual(stats["split_start"], 1)
+
+    def test_pos_name_aliases_match_printed_schedule_style(self):
+        aliases = schedule_app.pos_name_aliases("Monge, David")
+        self.assertIn("DAVID M", aliases)
 
 
 if __name__ == "__main__":
