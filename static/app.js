@@ -73,9 +73,33 @@ function normalizeShift(raw, format) {
   const upper = value.toUpperCase();
   if (upper === "0" || upper === "OFF" || upper === "OOF") return "OFF";
   if (["CL", "CLOSE", "CLOSING"].includes(upper)) return "CLOSE";
-  const pieces = value.split(/\s*(?:-|–|—|;)\s*/).filter(Boolean);
-  if (pieces.length === 2) return `${normalizeOneTime(pieces[0], format)}-${normalizeOneTime(pieces[1], format)}`;
-  return normalizeOneTime(value, format);
+  const shiftParts = value.split(/\s*(?:\/|,|\s+&\s+)\s*/).filter(Boolean);
+  return shiftParts.map((part) => {
+    const range = part.split(/\s*(?:;|\s[-–—]\s|(?<=\d)[-–—](?=\d))\s*/).filter(Boolean);
+    if (range.length === 2) {
+      const start = normalizeOneTime(range[0], format);
+      let end = normalizeOneTime(range[1], format);
+      const startMinutes = displayTimeMinutes(start);
+      const endMinutes = displayTimeMinutes(end);
+      const endHasSuffix = /[AP]M/i.test(range[1]);
+      if (!endHasSuffix && startMinutes != null && endMinutes != null && endMinutes <= startMinutes) {
+        end = formatTime(Math.floor((endMinutes + 12 * 60) / 60), (endMinutes + 12 * 60) % 60, format);
+      }
+      return `${start}-${end}`;
+    }
+    return normalizeOneTime(part, format);
+  }).join(" / ");
+}
+
+function displayTimeMinutes(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})\s*([AP]M)?$/i);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const suffix = match[3]?.toUpperCase();
+  if (suffix === "PM" && hour < 12) hour += 12;
+  if (suffix === "AM" && hour === 12) hour = 0;
+  return hour * 60 + minute;
 }
 
 function applyVisualPrefs(prefs) {
@@ -92,7 +116,7 @@ function applyVisualPrefs(prefs) {
 
 function convertDisplayFormat(value, format) {
   if (!value || value === "OFF" || value === "CLOSE") return value;
-  return String(value).split("-").map((part) => normalizeOneTime(part, format)).join("-");
+  return normalizeShift(value, format);
 }
 
 function focusAndSelect(input) {
@@ -157,7 +181,7 @@ async function autosaveShift(input, force = false) {
   setAutosaveStatus("Saving…", "saving");
   try {
     const result = await postJson(`/api/week/${weekStart}/shift`, {
-      employee_id: input.dataset.employeeId,
+      assignment_id: input.dataset.assignmentId,
       day_index: input.dataset.dayIndex,
       label: input.value
     });
@@ -319,6 +343,18 @@ function setupBulkScheduleButtons() {
       setAutosaveStatus("Copy failed", "error");
     }
   });
+  document.getElementById("fill-off")?.addEventListener("click", async () => {
+    if (!confirm("Mark every blank schedule cell OFF? Existing shifts will not be changed.")) return;
+    setAutosaveStatus("Filling…", "saving");
+    try {
+      const result = await postJson(`/api/week/${weekStart}/fill-off`, {});
+      applyShiftPayload(result.shifts);
+      setAutosaveStatus("Saved", "saved");
+    } catch (error) {
+      console.error(error);
+      setAutosaveStatus("Fill failed", "error");
+    }
+  });
 }
 
 function setupPreferencesPage(prefs) {
@@ -374,6 +410,37 @@ function setupEmployeesPage() {
     input.addEventListener("blur", () => saveName(input));
   });
 
+  document.querySelectorAll(".employee-details-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = button.closest(".employee-card")?.querySelector(".employee-details");
+      if (!panel) return;
+      panel.hidden = !panel.hidden;
+      button.textContent = panel.hidden ? "Details" : "Hide Details";
+    });
+  });
+
+  document.querySelectorAll(".employee-detail-input").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const value = input.type === "checkbox" ? input.checked : input.value;
+      try {
+        await patchJson(`/api/employees/${input.dataset.employeeId}`, { [input.dataset.field]: value });
+        input.classList.remove("save-error");
+      } catch (error) {
+        console.error(error);
+        input.classList.add("save-error");
+      }
+    });
+  });
+
+  document.querySelectorAll(".add-role-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const select = button.closest(".add-role-row")?.querySelector(".additional-role-select");
+      if (!select) return;
+      await postJson(`/api/employees/${button.dataset.employeeId}/roles`, { role_id: select.value });
+      window.location.reload();
+    });
+  });
+
   document.getElementById("add-employee-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -382,15 +449,15 @@ function setupEmployeesPage() {
     window.location.reload();
   });
 
-  document.querySelectorAll(".archive-employee-button").forEach((button) => {
+  document.querySelectorAll(".archive-assignment-button").forEach((button) => {
     button.addEventListener("click", async () => {
-      if (!confirm("Archive this employee and hide them from the schedule?")) return;
-      await postJson(`/api/employees/${button.dataset.employeeId}/archive`, {});
+      if (!confirm("Remove this role assignment from the active schedule? Other roles for the same employee will remain.")) return;
+      await postJson(`/api/assignments/${button.dataset.assignmentId}/archive`, {});
       window.location.reload();
     });
   });
-  document.querySelectorAll(".unarchive-employee-button").forEach((button) => {
-    button.addEventListener("click", async () => { await postJson(`/api/employees/${button.dataset.employeeId}/unarchive`, {}); window.location.reload(); });
+  document.querySelectorAll(".unarchive-assignment-button").forEach((button) => {
+    button.addEventListener("click", async () => { await postJson(`/api/assignments/${button.dataset.assignmentId}/unarchive`, {}); window.location.reload(); });
   });
 
   let dragged = null;
@@ -422,7 +489,7 @@ function getDragAfterElement(container, y) {
 async function saveEmployeeOrder() {
   const roles = {};
   document.querySelectorAll(".employee-dropzone").forEach((zone) => {
-    roles[zone.dataset.roleId] = [...zone.querySelectorAll(".employee-card")].map((card) => card.dataset.employeeId);
+    roles[zone.dataset.roleId] = [...zone.querySelectorAll(".employee-card")].map((card) => card.dataset.assignmentId);
   });
   try { await postJson("/api/employees/reorder", { roles }); }
   catch (error) { console.error(error); alert("Could not save the new employee order."); }
