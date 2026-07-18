@@ -26,24 +26,15 @@
           <article class="employee-card" draggable="true" data-assignment-id="{{ emp.assignment_id }}" data-employee-id="{{ emp.employee_id }}">
             <span class="drag-handle" title="Drag this role assignment">☰</span>
             <input class="employee-name-input" value="{{ emp.name }}" data-employee-id="{{ emp.employee_id }}" aria-label="Employee name">
-            <button type="button" class="employee-details-button secondary">Details</button>
+            <button type="button" class="employee-details-button secondary">Add Role</button>
             <button type="button" class="archive-assignment-button secondary" data-assignment-id="{{ emp.assignment_id }}">Remove Role</button>
             <div class="employee-details" hidden>
-              <label>Date of birth (optional; use for employees under 18)
-                <input type="date" class="employee-detail-input" data-field="date_of_birth" data-employee-id="{{ emp.employee_id }}" value="{{ emp.date_of_birth or '' }}">
-              </label>
-              <div class="school-hours-row">
-                <label>School begins <input type="time" class="employee-detail-input" data-field="school_start_time" data-employee-id="{{ emp.employee_id }}" value="{{ emp.school_start_time or '08:00' }}"></label>
-                <label>School ends <input type="time" class="employee-detail-input" data-field="school_end_time" data-employee-id="{{ emp.employee_id }}" value="{{ emp.school_end_time or '15:00' }}"></label>
-              </div>
-              <label class="check-label"><input type="checkbox" class="employee-detail-input" data-field="parental_late_consent" data-employee-id="{{ emp.employee_id }}" {% if emp.parental_late_consent %}checked{% endif %}> Valid TN parental consent form is on file for work after 10 PM</label>
               <div class="add-role-row">
                 <select class="additional-role-select">
                   {% for option_role in roles %}<option value="{{ option_role.id }}">{{ option_role.title }} {{ option_role.subtitle }}</option>{% endfor %}
                 </select>
                 <button type="button" class="add-role-button" data-employee-id="{{ emp.employee_id }}">Add Another Role</button>
               </div>
-              <p class="muted">The same personal details are shared anywhere this employee appears.</p>
             </div>
           </article>
         {% else %}
