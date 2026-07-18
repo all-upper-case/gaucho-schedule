@@ -75,31 +75,9 @@ function normalizeShift(raw, format) {
   if (["CL", "CLOSE", "CLOSING"].includes(upper)) return "CLOSE";
   const shiftParts = value.split(/\s*(?:\/|,|\s+&\s+)\s*/).filter(Boolean);
   return shiftParts.map((part) => {
-    const range = part.split(/\s*(?:;|\s[-–—]\s|(?<=\d)[-–—](?=\d))\s*/).filter(Boolean);
-    if (range.length === 2) {
-      const start = normalizeOneTime(range[0], format);
-      let end = normalizeOneTime(range[1], format);
-      const startMinutes = displayTimeMinutes(start);
-      const endMinutes = displayTimeMinutes(end);
-      const endHasSuffix = /[AP]M/i.test(range[1]);
-      if (!endHasSuffix && startMinutes != null && endMinutes != null && endMinutes <= startMinutes) {
-        end = formatTime(Math.floor((endMinutes + 12 * 60) / 60), (endMinutes + 12 * 60) % 60, format);
-      }
-      return `${start}-${end}`;
-    }
-    return normalizeOneTime(part, format);
+    const startOnly = part.split(/\s*[;\-–—]\s*/, 1)[0];
+    return normalizeOneTime(startOnly, format);
   }).join(" / ");
-}
-
-function displayTimeMinutes(value) {
-  const match = String(value || "").match(/^(\d{1,2}):(\d{2})\s*([AP]M)?$/i);
-  if (!match) return null;
-  let hour = Number(match[1]);
-  const minute = Number(match[2]);
-  const suffix = match[3]?.toUpperCase();
-  if (suffix === "PM" && hour < 12) hour += 12;
-  if (suffix === "AM" && hour === 12) hour = 0;
-  return hour * 60 + minute;
 }
 
 function applyVisualPrefs(prefs) {
@@ -415,20 +393,7 @@ function setupEmployeesPage() {
       const panel = button.closest(".employee-card")?.querySelector(".employee-details");
       if (!panel) return;
       panel.hidden = !panel.hidden;
-      button.textContent = panel.hidden ? "Details" : "Hide Details";
-    });
-  });
-
-  document.querySelectorAll(".employee-detail-input").forEach((input) => {
-    input.addEventListener("change", async () => {
-      const value = input.type === "checkbox" ? input.checked : input.value;
-      try {
-        await patchJson(`/api/employees/${input.dataset.employeeId}`, { [input.dataset.field]: value });
-        input.classList.remove("save-error");
-      } catch (error) {
-        console.error(error);
-        input.classList.add("save-error");
-      }
+      button.textContent = panel.hidden ? "Add Role" : "Cancel";
     });
   });
 
