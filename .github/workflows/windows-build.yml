@@ -1,0 +1,58 @@
+name: Build portable Windows app
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "app.py"
+      - "templates/**"
+      - "static/**"
+      - "requirements.txt"
+      - "GauchoSchedule.spec"
+      - ".github/workflows/windows-build.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "app.py"
+      - "templates/**"
+      - "static/**"
+      - "requirements.txt"
+      - "GauchoSchedule.spec"
+      - ".github/workflows/windows-build.yml"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "pyinstaller>=6.0,<7"
+
+      - name: Build portable folder
+        run: pyinstaller --noconfirm --clean GauchoSchedule.spec
+
+      - name: Add office instructions
+        shell: pwsh
+        run: Copy-Item WINDOWS_README.txt dist/GauchoSchedule/README.txt
+
+      - name: Create ZIP
+        shell: pwsh
+        run: Compress-Archive -Path dist/GauchoSchedule/* -DestinationPath GauchoSchedule-Windows.zip
+
+      - name: Upload Windows app
+        uses: actions/upload-artifact@v4
+        with:
+          name: GauchoSchedule-Windows
+          path: GauchoSchedule-Windows.zip
+          if-no-files-found: error
