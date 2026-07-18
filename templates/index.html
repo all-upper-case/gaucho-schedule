@@ -27,6 +27,13 @@
   </div>
 </section>
 
+<section class="card office-card">
+  <h2>Data &amp; backups</h2>
+  <p>The complete schedule database is stored at <code>{{ data_path }}</code>.</p>
+  <a class="button" href="/backup">Download Complete Backup</a>
+  {% if packaged %}<p class="muted">This is the portable Windows edition; Python is not required on this computer.</p>{% endif %}
+</section>
+
 <section class="card status-card">
   <h2>Dropdown history</h2>
   {% if history_rows %}

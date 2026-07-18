@@ -1,22 +1,42 @@
 # Gaucho Schedule
 
-A small local-first web app for editing and printing Gaucho Urbano's weekly employee schedule.
+A local-first web app for building, checking, preserving, printing, and exporting Gaucho Urbano's weekly employee schedule.
 
-The app is designed to run on the office computer at `http://127.0.0.1:5000` by default. It can also be tested in Replit and later deployed to a small web host if phone/multi-manager access becomes useful.
+## Features
 
-## Current MVP features
+- Weekly editor grouped by department/role, with autosave and keyboard navigation
+- Multiple roles for one employee
+- Split shifts in one role/day, such as `9-12 / 4-9`
+- Hour-by-hour staffing coverage view
+- Optional employee date of birth, school hours, and parental-consent tracking
+- Tennessee/federal minor-hours warnings using explicit scheduled start/end times
+- School-week and school-day controls for each weekly schedule
+- Blank-cell-to-OFF bulk action
+- Publish/lock workflow with downloadable version snapshots
+- Automatic preservation of the current week when creating the next week
+- Complete SQLite database backups
+- Print-friendly schedule, Excel export, and CSV export
+- Windows portable build that does not require Python on the office computer
 
-- Weekly schedule editor grouped by department/role
-- Seed employee list based on the current Excel/PDF schedule layout
-- Copy current week into the next week
-- Employee add/edit/deactivate screen
-- Print-friendly schedule view
-- Excel (`.xlsx`) and CSV export
-- Basic warnings for suspicious shift entries, such as `10;1600`, `1700`, odd minutes, or `12:00 AM`
+## Recommended: portable Windows edition
 
-## Run locally on Windows
+The GitHub Actions workflow named **Build portable Windows app** creates `GauchoSchedule-Windows.zip`.
 
-Open **Command Prompt** in the project folder and run:
+1. In GitHub, open **Actions** → **Build portable Windows app** → **Run workflow**.
+2. When it finishes, download the `GauchoSchedule-Windows` artifact.
+3. Extract the ZIP to a normal local folder on the office computer.
+4. Double-click `GauchoSchedule.exe`. The schedule opens automatically in the default browser.
+5. Leave the small server window open while using the app. Close that window when finished.
+
+Python does not need to be installed on the office computer. The portable app stores its live database in:
+
+```text
+%LOCALAPPDATA%\GauchoSchedule\gaucho_schedule.sqlite3
+```
+
+The app's **Backup** link downloads a safe copy of the complete database.
+
+## Developer setup
 
 ```bat
 py -m venv .venv
@@ -25,36 +45,23 @@ pip install -r requirements.txt
 py app.py
 ```
 
-Then open this address in the browser:
+Then open `http://127.0.0.1:5000`.
 
-```text
-http://127.0.0.1:5000
-```
+## Shift entry
 
-To stop the app, click the Command Prompt window and press `Ctrl+C`.
+- One complete shift: `4-9` → `4:00 PM-9:00 PM`
+- Split shift: `9-12 / 4-9` → `9:00 AM-12:00 PM / 4:00 PM-9:00 PM`
+- Start-only adult entry: `3` → `3:00 PM`
+- Not scheduled: `OFF`
 
-## Run in Replit
+Minor compliance cannot be verified from start-only or `CLOSE` entries. Enter an explicit end time for employees under 18.
 
-Create/import a Replit project from this GitHub repository. For a basic Python Repl, set the run command to:
+## Schedule preservation
 
-```bash
-python app.py
-```
+Each week is stored separately. **Create Next Week** publishes, snapshots, and locks the current week before copying it. Published schedules cannot be edited accidentally. Reopening a published week creates another snapshot first. Existing target weeks are never silently overwritten.
 
-Replit may expose the app through its own web preview instead of `127.0.0.1:5000`.
+## Important security and compliance notes
 
-## Data storage
+This version is intended for local use. It has no login system and must not be exposed directly to the public internet.
 
-By default, the SQLite database is created here:
-
-```text
-data/gaucho_schedule.sqlite3
-```
-
-That database file is intentionally ignored by Git so employee/schedule data does not get pushed to the public repository.
-
-To use a different database path, set the `GAUCHO_SCHEDULE_DB` environment variable.
-
-## Important security note
-
-This first version is intended for local use or private testing. It does not include login/password protection yet. Do not deploy it publicly for real manager use until authentication is added.
+The warnings are a scheduling aid, not legal advice. They depend on accurate employee data, school-day settings, and complete shift ranges. See [LEGAL_NOTES.md](LEGAL_NOTES.md) for the implemented rules, source links, and limitations.

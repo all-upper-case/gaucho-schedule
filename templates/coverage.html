@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero-card">
+  <div><h1>Coverage — Week of {{ week_start.strftime('%m/%d/%Y') }}</h1><p>Scheduled people present at each hour, based on complete start–end ranges.</p></div>
+  <a class="button secondary" href="/week/{{ week_start.isoformat() }}">Back to Schedule</a>
+</section>
+
+{% if incomplete %}
+<section class="warning-box">
+  <h2>Not included in the coverage counts</h2>
+  <p>These entries need explicit end times:</p>
+  <ul>{% for item in incomplete %}<li>{{ item }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+{% for day_index in range(7) %}
+<section class="card coverage-card">
+  <h2>{{ days[day_index] }} — {{ dates[day_index].strftime('%m/%d') }}</h2>
+  <div class="coverage-scroll">
+    <table class="coverage-table">
+      <thead><tr><th>Role</th>{% for slot in slots %}<th>{{ format_minutes(slot) }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for role, counts in tables[day_index] %}
+        <tr><th>{{ role.title }} {{ role.subtitle }}</th>{% for count in counts %}<td class="coverage-count coverage-{{ [count, 4]|min }}">{{ count }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endfor %}
+{% endblock %}

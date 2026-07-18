@@ -2,45 +2,72 @@
 {% block content %}
 <div class="schedule-header">
   <div>
-    <h1>Week of {{ week_start.strftime('%m/%d/%Y') }}</h1>
+    <div class="title-with-status">
+      <h1>Week of {{ week_start.strftime('%m/%d/%Y') }}</h1>
+      {% if week.published_at %}<span class="status-pill published">Published &amp; locked</span>{% else %}<span class="status-pill draft">Draft</span>{% endif %}
+    </div>
     <p>{{ week_start.strftime('%m/%d/%Y') }} through {{ week_end.strftime('%m/%d/%Y') }}</p>
   </div>
   <div class="actions">
+    <a class="button secondary" href="/coverage/{{ week_start.isoformat() }}">Coverage</a>
     <a class="button secondary" href="/print/{{ week_start.isoformat() }}" target="_blank">Print View</a>
     <a class="button secondary" href="/export/{{ week_start.isoformat() }}.xlsx">Export Excel</a>
-    <a class="button secondary" href="/export/{{ week_start.isoformat() }}.csv">Export CSV</a>
-    <form action="/week/{{ week_start.isoformat() }}/copy-next" method="post">
-      <button type="submit">Create Next Week</button>
-    </form>
+    <a class="button secondary" href="/week/{{ week_start.isoformat() }}/versions">Versions ({{ versions|length }})</a>
+    <button type="submit" form="schedule-form" formaction="/week/{{ week_start.isoformat() }}/copy-next" formmethod="post" onclick="return confirm('Publish and lock this week, then create the next week from it?');">Create Next Week</button>
   </div>
 </div>
 
-<section class="toolbar-card" data-week-start="{{ week_start.isoformat() }}">
-  <div>
-    <strong>Build this week quickly</strong>
-    <p>These buttons autosave immediately.</p>
-  </div>
-  <div class="actions">
-    <button type="button" id="fill-best-times">Fill Everyone’s Best Time</button>
-    <button type="button" id="copy-previous-week" class="secondary">Use Same Schedule as Previous Week</button>
-    <span id="autosave-status" class="autosave-status">Saved</span>
-  </div>
-</section>
+{% if week.published_at %}
+  <section class="published-notice">
+    <div><strong>This copy is protected.</strong><br><span>Published {{ week.published_at }}. Printing and exporting are still available.</span></div>
+    <form action="/week/{{ week_start.isoformat() }}/reopen" method="post" onsubmit="return confirm('Reopen this schedule for corrections? The published version will remain in history.');">
+      <button class="secondary" type="submit">Reopen for Correction</button>
+    </form>
+  </section>
+{% else %}
+  <section class="toolbar-card" data-week-start="{{ week_start.isoformat() }}">
+    <div>
+      <strong>Build this week quickly</strong>
+      <p>These buttons autosave immediately.</p>
+    </div>
+    <div class="actions">
+      <button type="button" id="fill-off">Mark All Blank Cells OFF</button>
+      <button type="button" id="fill-best-times" class="secondary">Fill Everyone’s Best Time</button>
+      <button type="button" id="copy-previous-week" class="secondary">Use Same Schedule as Previous Week</button>
+      <span id="autosave-status" class="autosave-status">Saved</span>
+    </div>
+  </section>
+{% endif %}
+
+<details class="card school-settings" {% if warnings %}open{% endif %}>
+  <summary><strong>Minor labor-law settings for this week</strong></summary>
+  <form action="/week/{{ week_start.isoformat() }}/settings" method="post">
+    <label class="check-label"><input type="checkbox" name="school_in_session" {% if week.school_in_session %}checked{% endif %} {% if week.published_at %}disabled{% endif %}> School is in session during this week</label>
+    <div class="school-day-grid">
+      {% for day in days %}
+        <label><input type="checkbox" name="school_day_{{ loop.index0 }}" {% if loop.index0 in school_days %}checked{% endif %} {% if week.published_at %}disabled{% endif %}> {{ day }}</label>
+      {% endfor %}
+    </div>
+    <p class="muted">These boxes control school-day hour limits. Employee-specific school start/end times and parental-consent status are managed on the Employees screen.</p>
+    {% if not week.published_at %}<button type="submit">Save School Settings</button>{% endif %}
+  </form>
+</details>
 
 <section class="quick-help">
-  <strong>Fast entry:</strong> click a cell and type shorthand like <code>3</code>, <code>300</code>, <code>15</code>, <code>1500</code>, or <code>10;1600</code>. It autocorrects and autosaves when you leave the cell. Press <kbd>Enter</kbd> or <kbd>↓</kbd> to move down; <kbd>Tab</kbd>, <kbd>Space</kbd>, or <kbd>→</kbd> to move right.
+  <strong>Fast entry:</strong> enter a complete range such as <code>4-9</code>. For two shifts in one day, use <code>9-12 / 4-9</code>. Start-only entries still work for adults, but minor-law checks require explicit end times. Press <kbd>Enter</kbd> or <kbd>↓</kbd> to move down; <kbd>Tab</kbd>, <kbd>Space</kbd>, or <kbd>→</kbd> to move right.
 </section>
 
 {% if warnings %}
 <section class="warning-box">
-  <h2>Things to double-check before printing</h2>
-  <ul>
-    {% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}
+  <h2>Things to check before publishing</h2>
+  <ul class="compliance-list">
+    {% for warning in warnings %}<li class="{{ warning.level }}">{{ warning.text }}</li>{% endfor %}
   </ul>
+  <p class="muted">These automated checks are a scheduling aid, not legal advice. They depend on correct birth dates, school-day settings, school hours, consent status, and explicit shift end times.</p>
 </section>
 {% endif %}
 
-<form action="/week/{{ week_start.isoformat() }}/save" method="post" class="schedule-form">
+<form id="schedule-form" action="/week/{{ week_start.isoformat() }}/save" method="post" class="schedule-form">
   {% for role, employees in grouped %}
     <section class="role-card">
       <table class="schedule-table">
@@ -52,22 +79,23 @@
         </thead>
         <tbody>
           {% for emp in employees %}
-            <tr>
-              <th class="employee-name">{{ emp.name }}</th>
+            <tr class="{% if emp.date_of_birth %}minor-tracked{% endif %}">
+              <th class="employee-name">{{ emp.name }}{% if emp.date_of_birth %}<small class="minor-badge">DOB {{ emp.date_of_birth }}</small>{% endif %}</th>
               {% for i in range(7) %}
                 <td>
                   <div class="shift-cell-wrap">
                     <input
                       class="shift-input"
-                      name="shift_{{ emp.id }}_{{ i }}"
-                      value="{{ shifts.get((emp.id, i), 'OFF') }}"
+                      name="shift_{{ emp.assignment_id }}_{{ i }}"
+                      value="{{ shifts.get((emp.assignment_id, i), '') }}"
                       autocomplete="off"
                       data-col="{{ i }}"
-                      data-employee-id="{{ emp.id }}"
+                      data-assignment-id="{{ emp.assignment_id }}"
                       data-day-index="{{ i }}"
-                      data-options='{{ suggestions.get((emp.id, i), []) | tojson }}'
+                      data-options='{{ suggestions.get((emp.assignment_id, i), []) | tojson }}'
+                      {% if week.published_at %}disabled{% endif %}
                     >
-                    <button class="cell-menu-button" type="button" title="Show options">▾</button>
+                    <button class="cell-menu-button" type="button" title="Show options" {% if week.published_at %}disabled{% endif %}>▾</button>
                   </div>
                 </td>
               {% endfor %}
@@ -78,10 +106,13 @@
     </section>
   {% endfor %}
 
-  <div class="sticky-save">
-    <button type="submit">Save Schedule</button>
-    <span class="muted">Autosave is active; the Save button is just a manual backup.</span>
-  </div>
+  {% if not week.published_at %}
+    <div class="sticky-save">
+      <button type="submit">Save Schedule</button>
+      <span class="muted">Autosave is active; the Save button is a manual backup.</span>
+      <button type="submit" class="publish-button" formaction="/week/{{ week_start.isoformat() }}/publish" formmethod="post" onclick="return confirm('Publish, snapshot, and lock this schedule?');">Publish &amp; Lock</button>
+    </div>
+  {% endif %}
 </form>
 <div id="smart-shift-menu" class="smart-shift-menu" hidden></div>
 {% endblock %}
