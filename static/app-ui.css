@@ -243,27 +243,11 @@
 
 .employee-details[hidden] { display: none; }
 
-.employee-details > label,
-.school-hours-row label {
-  display: grid;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.school-hours-row,
 .add-role-row {
   display: flex;
   gap: 10px;
   align-items: end;
   flex-wrap: wrap;
-}
-
-.check-label {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center;
-  gap: 8px;
 }
 
 .title-with-status {
@@ -295,25 +279,11 @@
   gap: 16px;
 }
 
-.school-settings summary { cursor: pointer; }
-.school-settings form { display: grid; gap: 12px; margin-top: 14px; }
-.school-day-grid { display: flex; gap: 12px; flex-wrap: wrap; }
-.school-day-grid label { display: flex; gap: 5px; align-items: center; }
-
-.minor-badge {
-  display: block;
-  color: #92400e;
-  font-size: 10px;
-  margin-top: 3px;
-}
-
-.compliance-list li.error { color: #991b1b; font-weight: 700; }
-.compliance-list li.warning { color: #854d0e; }
 .publish-button { margin-left: auto; background: #047857; }
 .publish-button:hover { background: #065f46; }
 
 .coverage-scroll { overflow-x: auto; }
-.coverage-table { border-collapse: collapse; min-width: 1100px; width: 100%; font-size: 12px; }
+.coverage-table { border-collapse: collapse; min-width: 850px; width: 100%; font-size: 12px; }
 .coverage-table th, .coverage-table td { border: 1px solid var(--line); padding: 6px; text-align: center; }
 .coverage-table th:first-child { min-width: 165px; text-align: left; position: sticky; left: 0; background: white; }
 .coverage-count { font-weight: 800; }
@@ -321,6 +291,7 @@
 .coverage-1 { color: #92400e; background: #fef3c7; }
 .coverage-2 { background: #e0f2fe; }
 .coverage-3, .coverage-4 { background: #d1fae5; }
+.coverage-table td small { display: block; margin-top: 4px; font-weight: 400; color: #4b5563; line-height: 1.25; }
 
 .version-list { display: grid; gap: 10px; }
 .version-list article { display: flex; justify-content: space-between; gap: 12px; align-items: center; border: 1px solid var(--line); border-radius: 9px; padding: 12px; }

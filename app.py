@@ -45,10 +45,8 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-local-only-change-befor
 DAYS = ["MON", "TUES", "WEDS", "THURS", "FRI", "SAT", "SUN"]
 DAY_WORDS = set(DAYS + ["THU"])
 GLOBAL_SHIFT_OPTIONS = [
-    "9:00 AM-12:00 PM / 4:00 PM-9:00 PM",
-    "10:00 AM-4:00 PM",
-    "3:00 PM-9:00 PM",
-    "4:00 PM-10:00 PM",
+    "9:00 AM / 4:00 PM",
+    "10:00 AM / 4:00 PM",
     "3:00 PM",
     "4:00 PM",
     "5:00 PM",
@@ -89,10 +87,6 @@ class ScheduleEmployee:
     employee_id: int
     name: str
     role_id: int
-    date_of_birth: str | None
-    parental_late_consent: int
-    school_start_time: str
-    school_end_time: str
     display_order: int
     archived_at: str | None = None
 
@@ -185,12 +179,6 @@ def init_db() -> None:
             """
         )
         ensure_column(db, "employees", "archived_at", "TEXT")
-        ensure_column(db, "employees", "date_of_birth", "TEXT")
-        ensure_column(db, "employees", "parental_late_consent", "INTEGER NOT NULL DEFAULT 0")
-        ensure_column(db, "employees", "school_start_time", "TEXT NOT NULL DEFAULT '08:00'")
-        ensure_column(db, "employees", "school_end_time", "TEXT NOT NULL DEFAULT '15:00'")
-        ensure_column(db, "weeks", "school_in_session", "INTEGER NOT NULL DEFAULT 1")
-        ensure_column(db, "weeks", "school_day_mask", "TEXT NOT NULL DEFAULT '1111100'")
         ensure_column(db, "weeks", "published_at", "TEXT")
 
         if db.execute("SELECT COUNT(*) FROM roles").fetchone()[0] == 0:
@@ -262,8 +250,7 @@ def schedule_employees(db: sqlite3.Connection, archived: bool = False) -> list[S
     where = "a.archived_at IS NOT NULL" if archived else "a.active = 1 AND a.archived_at IS NULL AND e.active = 1"
     rows = db.execute(
         f"""SELECT a.id AS assignment_id, e.id AS employee_id, e.name, a.role_id,
-                   e.date_of_birth, e.parental_late_consent, e.school_start_time,
-                   e.school_end_time, a.display_order, a.archived_at
+                   a.display_order, a.archived_at
             FROM employee_assignments a
             JOIN employees e ON e.id = a.employee_id
             WHERE {where}
@@ -363,75 +350,11 @@ def normalize_shift_label(value, output_format: str = "12h") -> str:
     multi_parts = [part.strip() for part in re.split(r"\s*(?:/|,|\s+&\s+)\s*", raw) if part.strip()]
     normalized_parts: list[str] = []
     for part in multi_parts:
-        range_parts = [piece.strip() for piece in re.split(r"\s*(?:;|\s[-–—]\s|(?<=\d)[-–—](?=\d))\s*", part) if piece.strip()]
-        if len(range_parts) == 2:
-            normalized_start = normalize_one_time(range_parts[0], output_format)
-            normalized_end = normalize_one_time(range_parts[1], output_format)
-            start_minutes = parse_time_minutes(normalized_start)
-            end_minutes = parse_time_minutes(normalized_end)
-            end_has_suffix = bool(re.search(r"[AaPp][Mm]", range_parts[1]))
-            if not end_has_suffix and start_minutes is not None and end_minutes is not None and end_minutes <= start_minutes:
-                normalized_end = format_minutes(end_minutes + 12 * 60, output_format)
-            normalized_parts.append(f"{normalized_start}-{normalized_end}")
-        else:
-            normalized_parts.append(normalize_one_time(part, output_format))
+        # Older versions accepted start-end ranges. If one is pasted, keep only
+        # the report time so printed schedules never imply a guaranteed end.
+        start_only = re.split(r"\s*[;\-–—]\s*", part, maxsplit=1)[0].strip()
+        normalized_parts.append(normalize_one_time(start_only, output_format))
     return " / ".join(normalized_parts)
-
-
-def parse_time_minutes(raw: str) -> int | None:
-    value = raw.strip().upper()
-    if value == "CLOSE":
-        return None
-    match = re.fullmatch(r"(\d{1,2}):(\d{2})\s*([AP]M)?", value)
-    if not match:
-        return None
-    hour, minute = int(match.group(1)), int(match.group(2))
-    suffix = match.group(3)
-    if suffix == "PM" and hour < 12:
-        hour += 12
-    if suffix == "AM" and hour == 12:
-        hour = 0
-    return hour * 60 + minute
-
-
-def shift_intervals(label: str) -> tuple[list[tuple[int, int]], bool]:
-    if not label or label == "OFF":
-        return [], True
-    intervals: list[tuple[int, int]] = []
-    complete = True
-    for part in [piece.strip() for piece in label.split("/") if piece.strip()]:
-        pieces = [piece.strip() for piece in part.split("-", 1)]
-        if len(pieces) != 2:
-            complete = False
-            continue
-        start, end = parse_time_minutes(pieces[0]), parse_time_minutes(pieces[1])
-        if start is None or end is None:
-            complete = False
-            continue
-        if end <= start:
-            end += 24 * 60
-        intervals.append((start, end))
-    return intervals, complete
-
-
-def merge_intervals(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    merged: list[list[int]] = []
-    for start, end in sorted(intervals):
-        if not merged or start > merged[-1][1]:
-            merged.append([start, end])
-        else:
-            merged[-1][1] = max(merged[-1][1], end)
-    return [(start, end) for start, end in merged]
-
-
-def age_on(dob_raw: str | None, day: date) -> int | None:
-    if not dob_raw:
-        return None
-    try:
-        dob = date.fromisoformat(dob_raw)
-    except ValueError:
-        return None
-    return day.year - dob.year - ((day.month, day.day) < (dob.month, dob.day))
 
 
 def label_is_usable(label: str, include_off: bool = True) -> bool:
@@ -542,120 +465,6 @@ def save_shift_value(db: sqlite3.Connection, week_id: int, employee: ScheduleEmp
     return label
 
 
-def school_days_for_week(week: sqlite3.Row) -> set[int]:
-    if not int(week["school_in_session"]):
-        return set()
-    mask = (week["school_day_mask"] or "1111100").ljust(7, "0")
-    return {index for index, value in enumerate(mask[:7]) if value == "1"}
-
-
-def is_summer_evening(day: date) -> bool:
-    labor_day = date(day.year, 9, 1)
-    while labor_day.weekday() != 0:
-        labor_day += timedelta(days=1)
-    return date(day.year, 6, 1) <= day <= labor_day
-
-
-def collect_warnings(db: sqlite3.Connection, week: sqlite3.Row, week_start: date) -> list[dict[str, str]]:
-    rows = db.execute(
-        """SELECT e.id AS employee_id, e.name, e.date_of_birth, e.parental_late_consent,
-                  e.school_start_time, e.school_end_time, a.role_id, r.title AS role_title,
-                  se.day_index, se.label
-           FROM schedule_entries se
-           JOIN employee_assignments a ON a.id = se.assignment_id
-           JOIN employees e ON e.id = a.employee_id
-           JOIN roles r ON r.id = a.role_id
-           WHERE se.week_id = ? AND TRIM(se.label) NOT IN ('', 'OFF')
-           ORDER BY e.name, se.day_index, a.role_id""",
-        (int(week["id"]),),
-    ).fetchall()
-    warnings: list[dict[str, str]] = []
-    by_employee_day: dict[tuple[int, int], list[sqlite3.Row]] = {}
-    for row in rows:
-        by_employee_day.setdefault((int(row["employee_id"]), int(row["day_index"])), []).append(row)
-
-    school_days = school_days_for_week(week)
-    weekly_minutes: dict[int, int] = {}
-    incomplete_minor: set[int] = set()
-    consent_late_nights: dict[int, int] = {}
-
-    for (employee_id, day_index), day_rows in by_employee_day.items():
-        employee = day_rows[0]
-        work_day = week_start + timedelta(days=day_index)
-        age = age_on(employee["date_of_birth"], work_day)
-        all_intervals: list[tuple[int, int]] = []
-        complete = True
-        raw_interval_count = 0
-        for row in day_rows:
-            intervals, row_complete = shift_intervals(row["label"])
-            all_intervals.extend(intervals)
-            raw_interval_count += len(intervals)
-            complete = complete and row_complete
-            if row["label"] == "12:00 AM":
-                warnings.append({"level": "warning", "text": f"{employee['name']} on {DAYS[day_index]} is entered as midnight; confirm this is intentional."})
-
-        merged = merge_intervals(all_intervals)
-        if len(merged) < raw_interval_count:
-            warnings.append({"level": "error", "text": f"{employee['name']} has overlapping shifts or roles on {DAYS[day_index]}."})
-        day_minutes = sum(end - start for start, end in merged)
-        weekly_minutes[employee_id] = weekly_minutes.get(employee_id, 0) + day_minutes
-
-        if age is None or age >= 18:
-            continue
-        if not complete:
-            incomplete_minor.add(employee_id)
-            warnings.append({"level": "error", "text": f"{employee['name']} is under 18 and has a shift without an explicit end time on {DAYS[day_index]}; compliance cannot be verified. Use a range such as 4:00 PM-9:00 PM."})
-        for start, end in merged:
-            if end - start >= 6 * 60:
-                warnings.append({"level": "warning", "text": f"{employee['name']} is scheduled for at least 6 consecutive hours on {DAYS[day_index]}; Tennessee requires a 30-minute unpaid break that is not during or before the first hour."})
-
-        school_start = parse_time_minutes(employee["school_start_time"] or "08:00") or 8 * 60
-        school_end = parse_time_minutes(employee["school_end_time"] or "15:00") or 15 * 60
-        if day_index in school_days and any(start < school_end and end > school_start for start, end in merged):
-            warnings.append({"level": "error", "text": f"{employee['name']} is scheduled during entered school hours on {DAYS[day_index]}."})
-
-        if age <= 15:
-            max_day = 3 * 60 if day_index in school_days else 8 * 60
-            if day_minutes > max_day:
-                warnings.append({"level": "error", "text": f"{employee['name']} ({age}) is scheduled {day_minutes / 60:.1f} hours on {DAYS[day_index]}; the limit is {max_day / 60:.0f} hours for this day."})
-            earliest = 7 * 60
-            latest = 21 * 60 if not school_days and is_summer_evening(work_day) else 19 * 60
-            if any(start < earliest or end > latest for start, end in merged):
-                latest_text = time_to_12h(latest // 60)
-                warnings.append({"level": "error", "text": f"{employee['name']} ({age}) is scheduled outside the permitted 7:00 AM-{latest_text} window on {DAYS[day_index]}."})
-        else:
-            next_day = work_day + timedelta(days=1)
-            next_is_school_day = next_day.weekday() in school_days if next_day.weekday() < 7 else False
-            if day_index == 6 and int(week["school_in_session"]):
-                next_is_school_day = 0 in school_days
-            if next_is_school_day and work_day.weekday() in {6, 0, 1, 2, 3}:
-                latest_end = max((end for _, end in merged), default=0)
-                has_consent = bool(employee["parental_late_consent"])
-                if latest_end > (24 * 60 if has_consent else 22 * 60):
-                    limit = "midnight with consent" if has_consent else "10:00 PM without a valid parental consent form"
-                    warnings.append({"level": "error", "text": f"{employee['name']} ({age}) is scheduled too late on {DAYS[day_index]}; the limit is {limit} before a school day."})
-                elif has_consent and latest_end > 22 * 60:
-                    consent_late_nights[employee_id] = consent_late_nights.get(employee_id, 0) + 1
-
-    employee_rows = {
-        int(row["id"]): row for row in db.execute("SELECT id, name, date_of_birth FROM employees WHERE date_of_birth IS NOT NULL")
-    }
-    for employee_id, minutes in weekly_minutes.items():
-        employee = employee_rows.get(employee_id)
-        if not employee:
-            continue
-        age = age_on(employee["date_of_birth"], week_start)
-        if age is not None and age <= 15 and employee_id not in incomplete_minor:
-            max_week = 18 * 60 if school_days else 40 * 60
-            if minutes > max_week:
-                warnings.append({"level": "error", "text": f"{employee['name']} ({age}) is scheduled {minutes / 60:.1f} hours this week; the limit is {max_week / 60:.0f} hours."})
-    for employee_id, nights in consent_late_nights.items():
-        if nights > 3:
-            employee = employee_rows.get(employee_id)
-            warnings.append({"level": "error", "text": f"{employee['name']} is scheduled after 10:00 PM on {nights} school nights; parental consent permits no more than 3 such nights per week."})
-    return warnings
-
-
 def week_dates(week_start: date) -> list[date]:
     return [week_start + timedelta(days=index) for index in range(7)]
 
@@ -731,26 +540,20 @@ def import_history_from_workbook(path: Path) -> tuple[int, int, int]:
 
 
 def coverage_data(grouped, shifts):
-    slots = list(range(9 * 60, 24 * 60, 60))
-    tables = []
-    incomplete = []
-    for day_index in range(7):
-        role_rows = []
-        for role, employees_for_role in grouped:
-            counts = []
-            for slot in slots:
-                count = 0
-                for employee in employees_for_role:
-                    label = shifts.get((employee.assignment_id, day_index), "")
-                    intervals, complete = shift_intervals(label)
-                    if label not in {"", "OFF"} and not complete:
-                        incomplete.append(f"{employee.name} / {role.title} / {DAYS[day_index]}: {label}")
-                    if any(start <= slot < end for start, end in intervals):
-                        count += 1
-                counts.append(count)
-            role_rows.append((role, counts))
-        tables.append(role_rows)
-    return slots, tables, sorted(set(incomplete))
+    rows = []
+    for role, employees_for_role in grouped:
+        counts = []
+        names = []
+        for day_index in range(7):
+            scheduled = [
+                employee.name
+                for employee in employees_for_role
+                if shifts.get((employee.assignment_id, day_index), "").strip() not in {"", "OFF"}
+            ]
+            counts.append(len(scheduled))
+            names.append(scheduled)
+        rows.append((role, counts, names))
+    return rows
 
 
 @app.before_request
@@ -783,13 +586,11 @@ def edit_week(week_start: str):
     with closing(get_db()) as db:
         week, grouped, shifts = grouped_schedule(db, start)
         suggestions = build_suggestions(db, grouped, start)
-        warnings = collect_warnings(db, week, start)
         versions = db.execute("SELECT id, created_at, reason FROM week_versions WHERE week_id = ? ORDER BY id DESC", (week["id"],)).fetchall()
     return render_template(
         "schedule.html", week=week, week_start=start, week_end=start + timedelta(days=6),
         dates=week_dates(start), days=DAYS, grouped=grouped, shifts=shifts,
-        suggestions=suggestions, warnings=warnings, versions=versions,
-        school_days=school_days_for_week(week),
+        suggestions=suggestions, versions=versions,
     )
 
 
@@ -882,22 +683,6 @@ def save_week(week_start: str):
     return redirect(url_for("edit_week", week_start=start.isoformat()))
 
 
-@app.route("/week/<week_start>/settings", methods=["POST"])
-def save_week_settings(week_start: str):
-    start = parse_week_start(week_start)
-    with closing(get_db()) as db:
-        week = week_row(db, start)
-        if week["published_at"]:
-            flash("Reopen the schedule before changing school-day settings.")
-        else:
-            school_in_session = 1 if request.form.get("school_in_session") else 0
-            mask = "".join("1" if request.form.get(f"school_day_{index}") else "0" for index in range(7))
-            db.execute("UPDATE weeks SET school_in_session = ?, school_day_mask = ? WHERE id = ?", (school_in_session, mask, week["id"]))
-            db.commit()
-            flash("School-day settings saved.")
-    return redirect(url_for("edit_week", week_start=start.isoformat()))
-
-
 @app.route("/week/<week_start>/publish", methods=["POST"])
 def publish_week(week_start: str):
     start = parse_week_start(week_start)
@@ -985,8 +770,8 @@ def coverage(week_start: str):
     start = parse_week_start(week_start)
     with closing(get_db()) as db:
         _, grouped, shifts = grouped_schedule(db, start)
-    slots, tables, incomplete = coverage_data(grouped, shifts)
-    return render_template("coverage.html", week_start=start, dates=week_dates(start), days=DAYS, slots=slots, tables=tables, incomplete=incomplete, format_minutes=format_minutes)
+    coverage_rows = coverage_data(grouped, shifts)
+    return render_template("coverage.html", week_start=start, dates=week_dates(start), days=DAYS, coverage_rows=coverage_rows)
 
 
 @app.route("/print/<week_start>")
@@ -1048,13 +833,7 @@ def api_employee_update(employee_id: int):
     data = request.get_json(force=True)
     fields = []
     params = []
-    allowed = {
-        "name": lambda value: str(value).strip().upper(),
-        "date_of_birth": lambda value: str(value).strip() or None,
-        "parental_late_consent": lambda value: 1 if value else 0,
-        "school_start_time": lambda value: str(value).strip() or "08:00",
-        "school_end_time": lambda value: str(value).strip() or "15:00",
-    }
+    allowed = {"name": lambda value: str(value).strip().upper()}
     for field, converter in allowed.items():
         if field in data:
             fields.append(f"{field} = ?")

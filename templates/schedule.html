@@ -39,33 +39,9 @@
   </section>
 {% endif %}
 
-<details class="card school-settings" {% if warnings %}open{% endif %}>
-  <summary><strong>Minor labor-law settings for this week</strong></summary>
-  <form action="/week/{{ week_start.isoformat() }}/settings" method="post">
-    <label class="check-label"><input type="checkbox" name="school_in_session" {% if week.school_in_session %}checked{% endif %} {% if week.published_at %}disabled{% endif %}> School is in session during this week</label>
-    <div class="school-day-grid">
-      {% for day in days %}
-        <label><input type="checkbox" name="school_day_{{ loop.index0 }}" {% if loop.index0 in school_days %}checked{% endif %} {% if week.published_at %}disabled{% endif %}> {{ day }}</label>
-      {% endfor %}
-    </div>
-    <p class="muted">These boxes control school-day hour limits. Employee-specific school start/end times and parental-consent status are managed on the Employees screen.</p>
-    {% if not week.published_at %}<button type="submit">Save School Settings</button>{% endif %}
-  </form>
-</details>
-
 <section class="quick-help">
-  <strong>Fast entry:</strong> enter a complete range such as <code>4-9</code>. For two shifts in one day, use <code>9-12 / 4-9</code>. Start-only entries still work for adults, but minor-law checks require explicit end times. Press <kbd>Enter</kbd> or <kbd>↓</kbd> to move down; <kbd>Tab</kbd>, <kbd>Space</kbd>, or <kbd>→</kbd> to move right.
+  <strong>Fast entry:</strong> enter a report time such as <code>4</code>, <code>400</code>, or <code>1600</code>. For two report times in one day, use <code>9 / 4</code>. End times are intentionally not stored or printed. Press <kbd>Enter</kbd> or <kbd>↓</kbd> to move down; <kbd>Tab</kbd>, <kbd>Space</kbd>, or <kbd>→</kbd> to move right.
 </section>
-
-{% if warnings %}
-<section class="warning-box">
-  <h2>Things to check before publishing</h2>
-  <ul class="compliance-list">
-    {% for warning in warnings %}<li class="{{ warning.level }}">{{ warning.text }}</li>{% endfor %}
-  </ul>
-  <p class="muted">These automated checks are a scheduling aid, not legal advice. They depend on correct birth dates, school-day settings, school hours, consent status, and explicit shift end times.</p>
-</section>
-{% endif %}
 
 <form id="schedule-form" action="/week/{{ week_start.isoformat() }}/save" method="post" class="schedule-form">
   {% for role, employees in grouped %}
@@ -79,8 +55,8 @@
         </thead>
         <tbody>
           {% for emp in employees %}
-            <tr class="{% if emp.date_of_birth %}minor-tracked{% endif %}">
-              <th class="employee-name">{{ emp.name }}{% if emp.date_of_birth %}<small class="minor-badge">DOB {{ emp.date_of_birth }}</small>{% endif %}</th>
+            <tr>
+              <th class="employee-name">{{ emp.name }}</th>
               {% for i in range(7) %}
                 <td>
                   <div class="shift-cell-wrap">

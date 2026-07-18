@@ -6,11 +6,8 @@ A local-first web app for building, checking, preserving, printing, and exportin
 
 - Weekly editor grouped by department/role, with autosave and keyboard navigation
 - Multiple roles for one employee
-- Split shifts in one role/day, such as `9-12 / 4-9`
-- Hour-by-hour staffing coverage view
-- Optional employee date of birth, school hours, and parental-consent tracking
-- Tennessee/federal minor-hours warnings using explicit scheduled start/end times
-- School-week and school-day controls for each weekly schedule
+- Multiple report times in one role/day, such as `9 / 4`
+- Scheduled headcount by department and day
 - Blank-cell-to-OFF bulk action
 - Publish/lock workflow with downloadable version snapshots
 - Automatic preservation of the current week when creating the next week
@@ -49,19 +46,16 @@ Then open `http://127.0.0.1:5000`.
 
 ## Shift entry
 
-- One complete shift: `4-9` → `4:00 PM-9:00 PM`
-- Split shift: `9-12 / 4-9` → `9:00 AM-12:00 PM / 4:00 PM-9:00 PM`
-- Start-only adult entry: `3` → `3:00 PM`
+- One report time: `3` → `3:00 PM`
+- Two report times: `9 / 4` → `9:00 AM / 4:00 PM`
 - Not scheduled: `OFF`
 
-Minor compliance cannot be verified from start-only or `CLOSE` entries. Enter an explicit end time for employees under 18.
+End times are intentionally not stored or printed. If an old start-end range is pasted, the app keeps only its start time.
 
 ## Schedule preservation
 
 Each week is stored separately. **Create Next Week** publishes, snapshots, and locks the current week before copying it. Published schedules cannot be edited accidentally. Reopening a published week creates another snapshot first. Existing target weeks are never silently overwritten.
 
-## Important security and compliance notes
+## Important security note
 
 This version is intended for local use. It has no login system and must not be exposed directly to the public internet.
-
-The warnings are a scheduling aid, not legal advice. They depend on accurate employee data, school-day settings, and complete shift ranges. See [LEGAL_NOTES.md](LEGAL_NOTES.md) for the implemented rules, source links, and limitations.
