@@ -224,7 +224,7 @@
 .employee-card,
 .archived-employee-card {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 28px minmax(120px, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   border: 1px solid var(--line);
@@ -232,6 +232,99 @@
   padding: 8px;
   background: #fbfbfc;
 }
+
+.employee-details {
+  grid-column: 2 / -1;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.employee-details[hidden] { display: none; }
+
+.employee-details > label,
+.school-hours-row label {
+  display: grid;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.school-hours-row,
+.add-role-row {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.check-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-with-status {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.status-pill.draft { background: #fef3c7; color: #92400e; }
+.status-pill.published { background: #d1fae5; color: #065f46; }
+
+.published-notice {
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.school-settings summary { cursor: pointer; }
+.school-settings form { display: grid; gap: 12px; margin-top: 14px; }
+.school-day-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+.school-day-grid label { display: flex; gap: 5px; align-items: center; }
+
+.minor-badge {
+  display: block;
+  color: #92400e;
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+.compliance-list li.error { color: #991b1b; font-weight: 700; }
+.compliance-list li.warning { color: #854d0e; }
+.publish-button { margin-left: auto; background: #047857; }
+.publish-button:hover { background: #065f46; }
+
+.coverage-scroll { overflow-x: auto; }
+.coverage-table { border-collapse: collapse; min-width: 1100px; width: 100%; font-size: 12px; }
+.coverage-table th, .coverage-table td { border: 1px solid var(--line); padding: 6px; text-align: center; }
+.coverage-table th:first-child { min-width: 165px; text-align: left; position: sticky; left: 0; background: white; }
+.coverage-count { font-weight: 800; }
+.coverage-0 { color: #991b1b; background: #fee2e2; }
+.coverage-1 { color: #92400e; background: #fef3c7; }
+.coverage-2 { background: #e0f2fe; }
+.coverage-3, .coverage-4 { background: #d1fae5; }
+
+.version-list { display: grid; gap: 10px; }
+.version-list article { display: flex; justify-content: space-between; gap: 12px; align-items: center; border: 1px solid var(--line); border-radius: 9px; padding: 12px; }
+.office-card code { overflow-wrap: anywhere; }
 
 .archived-employee-card {
   grid-template-columns: 1fr auto auto;
@@ -287,8 +380,10 @@
 
 @media (max-width: 720px) {
   .employee-board { grid-template-columns: 1fr; }
-  .employee-card { grid-template-columns: 28px 1fr; }
-  .employee-card button { grid-column: 2; }
+  .employee-card { grid-template-columns: 28px 1fr auto; }
+  .archive-assignment-button { grid-column: 2 / -1; }
+  .employee-details { grid-column: 1 / -1; }
+  .published-notice { align-items: stretch; flex-direction: column; }
 }
 
 @media print {
