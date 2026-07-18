@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero-card">
+  <div><h1>Saved Versions</h1><p>Week of {{ week_start.strftime('%m/%d/%Y') }}</p></div>
+  <a class="button secondary" href="/week/{{ week_start.isoformat() }}">Back to Schedule</a>
+</section>
+<section class="card">
+  {% if versions %}
+    <div class="version-list">
+      {% for version in versions %}
+      <article><div><strong>{{ version.reason }}</strong><br><span class="muted">{{ version.created_at }}</span></div><a class="button secondary" href="/week/{{ week_start.isoformat() }}/versions/{{ version.id }}.json">Download Snapshot</a></article>
+      {% endfor %}
+    </div>
+  {% else %}<p>No snapshots yet. Publishing the schedule creates the first protected version.</p>{% endif %}
+</section>
+{% endblock %}
