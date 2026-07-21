@@ -45,8 +45,8 @@ app = Flask(
 )
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-local-only-change-before-hosting")
 
-DAYS = ["MON", "TUES", "WEDS", "THURS", "FRI", "SAT", "SUN"]
-DAY_WORDS = set(DAYS + ["THU"])
+DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+DAY_WORDS = set(DAYS + ["TUES", "WEDS", "THURS"])
 GLOBAL_SHIFT_OPTIONS = [
     "9:00 AM / 4:00 PM",
     "10:00 AM / 4:00 PM",
@@ -499,6 +499,28 @@ def save_shift_value(db: sqlite3.Connection, week_id: int, employee: ScheduleEmp
 
 def week_dates(week_start: date) -> list[date]:
     return [week_start + timedelta(days=index) for index in range(7)]
+
+
+def short_date_label(value: date) -> str:
+    return f"{DAYS[value.weekday()]} {value.month}/{value.day}/{str(value.year)[-2:]}"
+
+
+def balanced_print_pages(grouped: list[tuple[Role, list[ScheduleEmployee]]]) -> list[list[tuple[Role, list[ScheduleEmployee]]]]:
+    """Split complete role groups at the boundary closest to half the printed rows."""
+    if len(grouped) < 2:
+        return [grouped]
+    weights = [len(employees) + 2 for _, employees in grouped]
+    total = sum(weights)
+    running = 0
+    best_cut = 1
+    best_difference = total
+    for index, weight in enumerate(weights[:-1], start=1):
+        running += weight
+        difference = abs(total - (2 * running))
+        if difference < best_difference:
+            best_cut = index
+            best_difference = difference
+    return [grouped[:best_cut], grouped[best_cut:]]
 
 
 def surrounding_weeks(center: date, radius: int = 4):
@@ -1017,7 +1039,16 @@ def print_week(week_start: str):
     start = parse_week_start(week_start)
     with closing(get_db()) as db:
         _, grouped, shifts = grouped_schedule(db, start)
-    return render_template("print.html", week_start=start, week_end=start + timedelta(days=6), dates=week_dates(start), days=DAYS, grouped=grouped, shifts=shifts)
+    dates = week_dates(start)
+    return render_template(
+        "print.html",
+        week_start=start,
+        week_end=start + timedelta(days=6),
+        dates=dates,
+        date_labels=[short_date_label(value) for value in dates],
+        print_pages=balanced_print_pages(grouped),
+        shifts=shifts,
+    )
 
 
 @app.route("/preferences")
@@ -1436,8 +1467,7 @@ def export_csv(week_start: str):
     writer.writerow(["GAUCHO URBANO EMPLOYEE SCHEDULE", start.isoformat(), "through", (start + timedelta(days=6)).isoformat()])
     for role, employees_for_role in grouped:
         writer.writerow([])
-        writer.writerow([role.title, role.subtitle, *DAYS])
-        writer.writerow(["", "", *[day.day for day in week_dates(start)]])
+        writer.writerow([role.title, role.subtitle, *[short_date_label(day) for day in week_dates(start)]])
         for employee in employees_for_role:
             writer.writerow([employee.name, "", *[shifts.get((employee.assignment_id, index), "") for index in range(7)]])
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename=gaucho-schedule-{start.isoformat()}.csv"})
@@ -1462,8 +1492,8 @@ def export_xlsx(week_start: str):
     for role, employees_for_role in grouped:
         worksheet.cell(row=row_number, column=1, value=f"{role.title} {role.subtitle}".strip()).font = Font(bold=True)
         worksheet.cell(row=row_number, column=1).fill = header_fill
-        for column, day_name in enumerate(DAYS, start=3):
-            cell = worksheet.cell(row=row_number, column=column, value=f"{day_name}\n{week_dates(start)[column - 3].day}")
+        for column, value in enumerate(week_dates(start), start=3):
+            cell = worksheet.cell(row=row_number, column=column, value=short_date_label(value))
             cell.font = Font(bold=True, italic=True)
             cell.alignment = Alignment(horizontal="center", wrap_text=True)
             cell.fill = header_fill

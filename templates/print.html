@@ -11,32 +11,36 @@
     <a class="button secondary" href="/week/{{ week_start.isoformat() }}">Back to editor</a>
   </div>
 
-  <h1 class="print-title">GAUCHO URBANO EMPLOYEE SCHEDULE <span>{{ week_start.month }}/{{ week_start.day }}/{{ week_start.year }}</span> <em>through</em> <span>{{ week_end.month }}/{{ week_end.day }}/{{ week_end.year }}</span></h1>
+  {% for page_groups in print_pages %}
+    <main class="print-sheet">
+      <h1 class="print-title">GAUCHO URBANO EMPLOYEE SCHEDULE <span>{{ week_start.month }}/{{ week_start.day }}/{{ week_start.year }}</span> <em>through</em> <span>{{ week_end.month }}/{{ week_end.day }}/{{ week_end.year }}</span></h1>
 
-  {% for role, employees in grouped %}
-    <section class="print-section">
-      <table class="print-table">
-        <thead>
-          <tr>
-            <th>{{ role.title }}<br>{{ role.subtitle }}</th>
-            {% for day in days %}<th>{{ day }}<br>{{ dates[loop.index0].day }}</th>{% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for emp in employees %}
-            <tr>
-              <th>{{ emp.name }}</th>
-              {% for i in range(7) %}<td data-original-value="{{ shifts.get((emp.assignment_id, i), '') }}">{{ shifts.get((emp.assignment_id, i), '') }}</td>{% endfor %}
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
+      {% for role, employees in page_groups %}
+        <section class="print-section">
+          <table class="print-table">
+            <thead>
+              <tr>
+                <th>{{ role.title }}<br>{{ role.subtitle }}</th>
+                {% for label in date_labels %}<th>{{ label }}</th>{% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for emp in employees %}
+                <tr>
+                  <th>{{ emp.name }}</th>
+                  {% for i in range(7) %}<td data-original-value="{{ shifts.get((emp.assignment_id, i), '') }}">{{ shifts.get((emp.assignment_id, i), '') }}</td>{% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+      {% endfor %}
+
+      <div class="signature-row">
+        <span>Manager Signature</span><span>Date</span><span>Employee Signature</span>
+      </div>
+    </main>
   {% endfor %}
-
-  <div class="signature-row">
-    <span>Manager Signature</span><span>Date</span><span>Employee Signature</span>
-  </div>
   <script src="/static/app.js"></script>
 </body>
 </html>

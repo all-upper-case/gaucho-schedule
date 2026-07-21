@@ -50,7 +50,7 @@
         <thead>
           <tr>
             <th class="role-title">{{ role.title }}<br><span>{{ role.subtitle }}</span></th>
-            {% for day in days %}<th>{{ day }}<br><span>{{ dates[loop.index0].day }}</span></th>{% endfor %}
+            {% for day in dates %}<th>{{ days[loop.index0] }} <span>{{ day.month }}/{{ day.day }}/{{ day.strftime('%y') }}</span></th>{% endfor %}
           </tr>
         </thead>
         <tbody>
