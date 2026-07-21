@@ -1,12 +1,40 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card narrow">
-  <h1>Import schedule history</h1>
-  <p>Select the existing Excel schedule workbook. The app will scan the weekly tabs and use the old entries for smarter dropdown suggestions.</p>
-  <p class="muted">This rebuilds suggestion history only. It does not replace current schedules.</p>
+<section class="hero-card">
+  <div>
+    <h1>Import Data</h1>
+    <p>Use POS time entries to maintain employees, role assignments, and smart report-time suggestions.</p>
+  </div>
+</section>
+
+<section class="card import-primary-card">
+  <h2>Import POS time entries</h2>
+  <p>Upload a Toast/POS time-entry CSV containing Employee, Job, Date, Time In, Time Out, and Total Hours. Nothing changes until you review and confirm the mappings.</p>
+  <form action="/import-pos/preview" method="post" class="stacked-form" enctype="multipart/form-data">
+    <label>POS time-entry CSV <input type="file" name="pos_csv" accept=".csv,text/csv" required></label>
+    <button type="submit">Preview POS Import</button>
+  </form>
+  <p class="muted">Clock-out values are used only to distinguish meal re-clocks, job transfers, and likely split days. End times are never added to the schedule.</p>
+</section>
+
+<section class="card">
+  <h2>POS learning history</h2>
+  <p><strong>{{ pos_pattern_count }}</strong> learned POS report-time patterns are currently available to the smart dropdowns.</p>
+  {% if recent_pos_imports %}
+    <div class="import-history-list">
+      {% for item in recent_pos_imports %}
+        <article><strong>{{ item.filename }}</strong><span>{{ item.date_min }} through {{ item.date_max }}</span><span>{{ item.row_count }} rows</span><span>Imported {{ item.imported_at }}</span></article>
+      {% endfor %}
+    </div>
+  {% else %}<p class="muted">No POS exports have been confirmed yet.</p>{% endif %}
+</section>
+
+<details class="card legacy-import">
+  <summary><strong>Legacy Excel schedule history</strong></summary>
+  <p>The older workbook scanner remains available, but POS time entries are generally more reliable.</p>
   <form action="/import-history" method="post" class="stacked-form" enctype="multipart/form-data">
     <label>Schedule workbook <input type="file" name="schedule_workbook" accept=".xlsx,.xlsm" required></label>
-    <button type="submit">Import History</button>
+    <button type="submit" class="secondary">Import Excel Suggestions</button>
   </form>
-</section>
+</details>
 {% endblock %}

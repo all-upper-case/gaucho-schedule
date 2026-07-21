@@ -143,6 +143,7 @@ input, select {
   font-family: Arial, Helvetica, sans-serif;
 }
 .print-actions { margin-bottom: 18px; display: flex; gap: 10px; }
+.print-sheet + .print-sheet { margin-top: 24px; }
 .print-title {
   font-size: 18px;
   margin: 0 0 10px;
@@ -154,7 +155,8 @@ input, select {
 .print-section { break-inside: avoid; margin-bottom: 18px; }
 .print-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 1px;
   table-layout: fixed;
   font-size: 13px;
 }
@@ -162,10 +164,11 @@ input, select {
   border: 1px solid #111;
   padding: 4px 5px;
   text-align: center;
-  height: 24px;
+  height: 26px;
 }
 .print-table thead th { font-weight: 700; font-style: italic; }
 .print-table th:first-child { text-align: left; width: 18%; font-style: normal; }
+.print-table tbody th:first-child { font-size: 14px; font-weight: 800; letter-spacing: 0.01em; }
 .signature-row {
   display: flex;
   justify-content: space-between;
@@ -184,7 +187,11 @@ input, select {
   @page { size: letter portrait; margin: 0.35in; }
   .no-print { display: none !important; }
   body.print-page { padding: 0; }
+  .print-sheet { break-after: page; }
+  .print-sheet:last-child { break-after: auto; }
+  .print-sheet + .print-sheet { margin-top: 0; }
   .print-table { font-size: 11px; }
-  .print-table th, .print-table td { padding: 2px 4px; height: 20px; }
+  .print-table th, .print-table td { padding: 3px 4px; height: 22px; }
+  .print-table tbody th:first-child { font-size: 12px; }
   .print-section { margin-bottom: 10px; }
 }

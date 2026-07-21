@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero-card">
+  <div>
+    <h1>Review POS Import</h1>
+    <p>{{ original_filename }} · {{ date_min.isoformat() }} through {{ date_max.isoformat() }}</p>
+  </div>
+  <a class="button secondary" href="/import-history">Cancel</a>
+</section>
+
+<section class="import-stat-grid">
+  <article><strong>{{ row_count }}</strong><span>usable time entries</span></article>
+  <article><strong>{{ employee_rows|length }}</strong><span>POS employees</span></article>
+  <article><strong>{{ job_rows|length }}</strong><span>POS job labels</span></article>
+  <article><strong>{{ pattern_count }}</strong><span>learnable report-time patterns</span></article>
+</section>
+
+<section class="card classification-card">
+  <h2>How repeated entries were interpreted</h2>
+  <div class="classification-grid">
+    <span><strong>{{ classification.first_start or 0 }}</strong> first report times</span>
+    <span><strong>{{ classification.split_start or 0 }}</strong> likely split returns (90+ minute gap)</span>
+    <span><strong>{{ classification.meal_or_reclock or 0 }}</strong> meal/re-clock entries excluded</span>
+    <span><strong>{{ classification.job_transfer or 0 }}</strong> rapid job transfers excluded</span>
+    <span><strong>{{ classification.ambiguous or 0 }}</strong> ambiguous later entries excluded</span>
+  </div>
+  <p class="muted">All learned starts are rounded to the nearest 15 minutes. Clock-out times will not be stored as schedule suggestions.</p>
+  {% if row_errors %}<details><summary>{{ row_errors|length }} invalid rows will be ignored</summary><ul>{% for error in row_errors[:30] %}<li>{{ error }}</li>{% endfor %}</ul></details>{% endif %}
+</section>
+
+<form action="/import-pos/confirm/{{ token }}" method="post" id="pos-import-form">
+  <input type="hidden" name="original_filename" value="{{ original_filename }}">
+
+  <section class="card">
+    <h2>Default POS job mappings</h2>
+    <p>These defaults are remembered for later imports. Employee-specific choices below can override them.</p>
+    <div class="mapping-table-wrap">
+      <table class="mapping-table">
+        <thead><tr><th>POS job</th><th>Entries</th><th>Default schedule role</th></tr></thead>
+        <tbody>
+          {% for item in job_rows %}
+          <tr>
+            <td><strong>{{ item.job }}</strong></td><td>{{ item.count }}</td>
+            <td>
+              <select name="job_default_{{ loop.index0 }}" data-job-name="{{ item.job }}" class="job-default-select">
+                <option value="" {% if not item.default %}selected{% endif %}>No global default</option>
+                <option value="ignore" {% if item.default == 'ignore' %}selected{% endif %}>Ignore this POS job</option>
+                {% for role in roles %}<option value="role:{{ role.id }}" {% if item.default == 'role:' ~ role.id %}selected{% endif %}>{{ role.title }} {{ role.subtitle }}</option>{% endfor %}
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="section-title-row"><div><h2>Employees and role assignments</h2><p>Confirm who each POS name belongs to and where each job should appear on the printed schedule.</p></div><button type="button" class="secondary" id="expand-all-mappings">Expand All</button></div>
+    <div class="employee-mapping-list">
+      {% for item in employee_rows %}
+      {% set employee_index = loop.index0 %}
+      <details class="employee-mapping-card" data-employee-index="{{ employee_index }}">
+        <summary><strong>{{ item.pos_name }}</strong><span>{{ item.pairs|map(attribute='job')|join(', ') }}</span></summary>
+        <div class="employee-mapping-body">
+          <label>POS employee maps to
+            <select name="employee_choice_{{ employee_index }}" class="pos-employee-choice">
+              <option value="create" {% if item.employee_choice == 'create' %}selected{% endif %}>Create a new schedule employee</option>
+              <option value="ignore" {% if item.employee_choice == 'ignore' %}selected{% endif %}>Ignore this POS employee</option>
+              {% for option in employee_options %}<option value="existing:{{ option.id }}" {% if item.employee_choice == 'existing:' ~ option.id %}selected{% endif %}>{{ option.name }} — {{ option.role_names or 'no active role' }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="new-schedule-name">New employee’s printed name
+            <input name="new_name_{{ employee_index }}" value="{{ item.new_name }}">
+          </label>
+          <div class="pair-mapping-grid">
+            {% for pair in item.pairs %}
+            <label>{{ pair.job }} <small>{{ pair.count }} entries</small>
+              <select name="role_choice_{{ employee_index }}_{{ loop.index0 }}" class="pair-role-choice" data-pos-job="{{ pair.job }}" required>
+                <option value="" {% if not pair.role_value %}selected{% endif %}>Choose a schedule role…</option>
+                <option value="ignore" {% if pair.role_value == 'ignore' %}selected{% endif %}>Ignore this employee/job</option>
+                {% for role in roles %}<option value="role:{{ role.id }}" {% if pair.role_value == 'role:' ~ role.id %}selected{% endif %}>{{ role.title }} {{ role.subtitle }}</option>{% endfor %}
+              </select>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </details>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="sticky-save import-confirm-bar">
+    <button type="submit">Confirm Import</button>
+    <span class="muted">This will create or link employees, add confirmed roles, and teach the dropdowns. Existing schedules will not be changed.</span>
+  </div>
+</form>
+{% endblock %}

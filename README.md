@@ -13,6 +13,7 @@ A local-first web app for building, checking, preserving, printing, and exportin
 - Automatic preservation of the current week when creating the next week
 - Complete SQLite database backups
 - Print-friendly schedule, Excel export, and CSV export
+- Reviewed POS time-entry CSV import for employee, role, and report-time history
 - Windows portable build that does not require Python on the office computer
 
 ## Recommended: portable Windows edition
@@ -51,6 +52,12 @@ Then open `http://127.0.0.1:5000`.
 - Not scheduled: `OFF`
 
 End times are intentionally not stored or printed. If an old start-end range is pasted, the app keeps only its start time.
+
+## Importing POS time entries
+
+Open **Import Data**, upload a POS time-entry CSV, and review the proposed employee and job mappings before confirming. The app remembers confirmed mappings, adds roles without removing an employee's existing roles, and learns report-time suggestions by employee, role, and weekday.
+
+Clock-out values are used only during import to distinguish likely meal re-clocks, rapid job transfers, and genuine split shifts. They are never saved as schedule end times or printed. Exact duplicate files are rejected, and every confirmed import is recorded in the import history.
 
 ## Schedule preservation
 
